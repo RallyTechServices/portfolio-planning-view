@@ -3,10 +3,10 @@
 <head>
     <title>Portfolio Planning View</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Wed Dec 17 2014 10:54:36 GMT-0800 (PST) -->
+    <!--  Build Date: Wed Dec 17 2014 20:44:18 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Wed Dec 17 2014 10:54:36 GMT-0800 (PST)";
+        var APP_BUILD_DATE = "Wed Dec 17 2014 20:44:18 GMT-0800 (PST)";
         var CHECKSUM = [%= checksum %];
     </script>
     
@@ -138,16 +138,309 @@ Ext.define('Rally.technicalservices.Logger',{
 
 });
 
+/*
+ * A series of utilities to help construct trees
+ * with data gotten bottom or middle-up
+ * 
+ */
+ 
+Ext.define('Rally.technicalservices.util.TreeBuilding', {
+    singleton: true,
+    logger: new Rally.technicalservices.Logger(),
+    prepareModelHash: function(data, parentField){
+        var flat_data= _.flatten(data);
+        var data_hash = {};
+        Ext.each(flat_data, function(d){
+            data_hash[d.get('ObjectID')] = d;  
+            if (d.get(parentField)){
+                data_hash[d.get('ObjectID')].set('parent', d.get(parentField));
+            }
+        },this);
+        return data_hash; 
+    },
+    /*
+     * Given a hash of models (key = object id) that all know what
+     * their parent is (based on the "parent" field -- note lowercase)
+     * Return an array of models that are at the root level and
+     * have a "children" field (note lowercase)
+     * with appropriate  in an array items
+     */
+    constructRootItems:function(item_hash) {
+        var root_array = [];
+        Ext.Object.each(item_hash, function(oid,item){
+            if ( !item.get('children') ) { item.set('children',[]); }
+            var direct_parent = item.get('parent');
+            if (!direct_parent && !Ext.Array.contains(root_array,item)) {
+                root_array.push(item);
+            } else {
+                
+                var parent_oid =  direct_parent.ObjectID || direct_parent.get('ObjectID');
+                if (!item_hash[parent_oid]) {
+                    this.logger.log("Saved parent missing: ", parent_oid);
+                    if ( !Ext.Array.contains(root_array,item) ) {
+                        root_array.push(item);
+                    }
+                } else {
+                    var parent = item_hash[parent_oid];
+                    if ( !parent.get('children') ) { parent.set('children',[]); }
+                    var kids = parent.get('children');
+                    kids.push(item);
+                    parent.set('children',kids);
+                }
+            }
+        },this);
+        return root_array;
+    },
+    /*
+     * Given a hash of hashes (key = object id) that all know what
+     * their parent is (based on the "parent" field -- note lowercase)
+     * Return an array of models that are at the root level and
+     * have a "children" field (note lowercase)
+     * with appropriate items in an array 
+     */
+    constructRootItemsFromHashes:function(item_hash) {
+        var root_array = [];
+        Ext.Object.each(item_hash, function(oid,item){
+            if ( !item.children ) { item.children = []; }
+            var direct_parent = item.parent;
+            if (!direct_parent && !Ext.Array.contains(root_array,item)) {
+                root_array.push(item);
+            } else {
+                
+                var parent_oid =  direct_parent.ObjectID;
+                if (!item_hash[parent_oid]) {
+                    this.logger.log("Saved parent missing: ", parent_oid);
+                    if ( !Ext.Array.contains(root_array,item) ) {
+                        root_array.push(item);
+                    }
+                } else {
+                    var parent = item_hash[parent_oid];
+                    if ( !parent.children ) { parent.children = []; }
+                    var kids = parent.children;
+                    kids.push(item);
+                    parent.children = kids;
+                }
+            }
+        },this);
+        return root_array;
+    },
+    /**
+     * Given an array of models, turn them into hashes
+     */
+    convertModelsToHashes: function(model_array) {
+        var hash_array = [];
+        Ext.Array.each(model_array,function(model){
+            if (this.isModel(model)) {
+                var model_as_hash = model.data;
+                model_as_hash.expanded = false;
+                model_as_hash.leaf = false;
+                
+                // children & parent are fields that are not a 
+                // part of the model def'n so getData doesn't provide them
+                if ( model.get('children') ) {
+                    model_as_hash.children = this.convertModelsToHashes(model.get('children'));
+                }
+                if ( model.get('parent') ) {
+                    if ( this.isModel(model.get('parent') ) ) {
+                        model_as_hash.parent = model.get('parent').getData();
+                    } else {
+                        model_as_hash.parent = model.get('parent');
+                    }
+                }
+
+                if (!model_as_hash.children || model_as_hash.children.length === 0 ) {
+                    model_as_hash.leaf = true;
+                }
+                
+                hash_array.push(model_as_hash);
+            } else {
+                hash_array.push(model);
+            }
+        },this);
+        return hash_array;
+    },
+    isModel: function(model){
+        return model && ( model instanceof Ext.data.Model );
+    },
+    /**
+     * Given an array of top-level models (will have field called 'children' holding more models),
+     * roll up the value in the bottom of the tree's field_name
+     * 
+     * Config object has these values:
+     * 
+     * @param [{Ext.data.model}] root_items
+     * @param {String} field_name
+     * @param {Boolean} leaves_only (true to ignore parent value, false to add children to parent's existing value)
+     * @param {String|fn} calculator [ 'count' ]
+     */
+    rollup: function(config){
+        Ext.Array.each(config.root_items,function(root_item){
+            this._setValueFromChildren(root_item,config.field_name,config.calculator,config.leaves_only);
+        },this);
+        return config.root_items;
+    },
+    _setValueFromChildren:function(parent_item,field_name,calculator,leaves_only){
+        var parent_value = parent_item.get(field_name) || 0;
+        if ( calculator ) {
+            parent_value = this._calculate(parent_item,calculator);
+        }
+        var children = parent_item.get('children') || [];
+        
+        if ( leaves_only && children.length > 0 ) { parent_value = 0; }
+
+        Ext.Array.each(children,function(child_item) {
+            this._setValueFromChildren(child_item,field_name,calculator,leaves_only);
+            var child_value = child_item.get(field_name) || 0;
+            if ( calculator && child_value == 0 ) {
+                child_value = this._calculate(child_item,calculator);
+            }
+            parent_value += child_value;
+        },this);
+        parent_item.set(field_name,parent_value);
+        return;
+    },
+    _calculate:function(item,calculator){
+        'use strict';
+        if ( calculator == 'count' ) {
+            return 1;
+        }
+        return calculator(item);
+        
+    },
+    /**
+     * Given an array of root items, find nodes in the tree where field_name contains field_value
+     * and prune them
+     * 
+     * @param {} root_items
+     * @param {} field_name
+     * @param {} field_value
+     * @return {}
+     */
+    pruneByFieldValue: function(root_items,field_name,field_value){
+        Ext.Array.each(root_items,function(root_item){
+            this._removeByFieldValue(root_items,root_item,field_name,field_value);
+        },this);
+        return root_items;
+    },
+    _removeByFieldValue: function(parent_array,parent_item,field_name,field_value){
+        var tester = new RegExp(field_value);
+        
+        if ( parent_item ) {
+            var value = parent_item.get(field_name) || "";
+            if ( tester.test(value) ) {
+                Ext.Array.remove(parent_array,parent_item);
+            } else {
+                var kids = parent_item.get('children') || [];
+                if ( kids.length > 0 ) {
+                    Ext.Array.each(kids, function(kid){
+                        this._removeByFieldValue(kids,kid,field_name,field_value);
+                    },this);
+                }
+            }
+        }
+    }
+});
+Ext.define('Rally.technicalservices.data.ArtifactTreeModel',{
+    extend: 'Ext.data.Model',
+    fields: [
+        { name: 'FormattedID', type: 'String' },
+        { name: 'Name', type:'String' },
+        { name: '_ref', type:'String' },
+        { name: '_type', type:'String' }
+    ]
+});
+
 Ext.define('Rally.technicalservices.data.ArtifactTree',{
     extend: 'Ext.data.TreeStore',
+    requires: ['Rally.technicalservices.util.TreeBuilding'],
     logger: new Rally.technicalservices.Logger(),
     inputData: null,
+    parentField: 'Feature',
+    releaseStartDate: null,
+    releaseEndDate: null, 
     constructor: function(config) {
-        config = Ext.apply({}, config);
+        this.config = Ext.apply({}, config);
         this.inputData = []; 
     },
     build: function(){
         this.logger.log('Rally.technicalservices.data.ArtifactTree.build', this.inputData);
+        var model_hash = Rally.technicalservices.util.TreeBuilding.prepareModelHash(this.inputData, this.parentField);
+        var iterations = this._getIterations(model_hash,this.releaseStartDate, this.releaseEndDate);
+        
+        this.logger.log(iterations);
+        iterations['Unscheduled'] = {Name: 'Unscheduled'};
+        iterations['OutsideReleaseWindow'] = {Name: 'Outside Release Window'};
+        
+        model_hash = this._addColumnsAndBucketData(model_hash, iterations);
+        var root_array = Rally.technicalservices.util.TreeBuilding.constructRootItems(model_hash);
+        this.logger.log('build: root_array',root_array);
+        
+        var model_config = {
+                extend: 'Rally.technicalservices.data.ArtifactTreeModel',
+                fields: Object.keys(iterations)
+        };
+        
+        Ext.define('TSIterationTreeModelWithAdditions', model_config);
+        this.model = TSIterationTreeModelWithAdditions;
+        this.root = {expanded: false, children: root_array};
+        
+        this.columns = this._buildColumns(iterations);
+    },
+    _getIterations: function(model_hash, releaseStartDate, releaseEndDate){
+        var iterations = {};  
+        Ext.Object.each(model_hash, function(model){
+            var iteration = model_hash[model].get('Iteration');
+            if (iteration){
+                var key = iteration.Name; //Assumes Name is unique and all itertions with the same name ahve the same start and end dates
+                console.log(key,Ext.Array.contains(Object.keys(iterations),key),this._dateWithinRange(iteration.StartDate, iteration.EndDate, releaseStartDate, releaseEndDate));
+                if (key.length > 0 && !Ext.Array.contains(Object.keys(iterations),key) && 
+                        (this._dateWithinRange(iteration.StartDate, iteration.EndDate, releaseStartDate, releaseEndDate))){
+                    iterations[key]={Name: iteration.Name, StartDate: iteration.StartDate, EndDate: iteration.EndDate};
+                }
+            }
+        },this);
+        return iterations; 
+    },
+    _dateWithinRange: function(startDate, endDate, rangeStartDate, rangeEndDate){
+        var start = Rally.util.DateTime.fromIsoString(startDate);
+        var end = Rally.util.DateTime.fromIsoString(endDate);
+        var rangeStart = Rally.util.DateTime.fromIsoString(rangeStartDate);
+        var rangeEnd = Rally.util.DateTime.fromIsoString(rangeEndDate);
+        this.logger.log('_dateWithinRange', start, end, rangeStart, rangeEnd,(start < rangeEndDate && end > rangeStartDate) );
+        return (start < rangeEndDate && end > rangeStartDate);
+    },
+    _addColumnsAndBucketData: function(model_hash,iterations){
+        Ext.Object.each(model_hash, function(key, model){
+            Ext.Object.each(iterations, function(ikey, iteration){
+                model.set(iteration.Name, 0);
+            });
+            var model_iteration = 'Unscheduled';
+            if (model.get('Iteration')){
+                model_iteration = 'OutsideReleaseWindow';
+                if (Ext.Array.contains(Object.keys(iterations),model.get('Iteration').Name)){
+                    model_iteration = model.get('Iteration').Name;
+                }
+            }
+            if (model.get('PlanEstimate')){
+                model[model_iteration]= model.get('PlanEstimate');
+            } 
+        });
+        return model_hash; 
+    },
+    _buildColumns: function(iterations){
+        var columns = [
+                       {
+                           xtype: 'treecolumn',
+                           text: 'Item',
+                           dataIndex: 'ObjectID',
+                           itemId: 'tree_column',
+                           renderer: function(v,m,r){
+                               return r.get('FormattedID') + ': ' + r.get('Name');
+                           },
+                           width: 400,
+                           menuDisabled: true
+                       }];
+        return columns; 
     }
 });
 Ext.define('CustomApp', {
@@ -163,7 +456,7 @@ Ext.define('CustomApp', {
     portfolioItemType: 'PortfolioItem/Feature',
     portfolioItemFilterField: 'c_FeatureType',
     portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name'],
-    userStoryFetchFields: ['ObjectID','FormattedID','Name','PlanEstimate','Iteration','Name','StartDate','EndDate'],
+    userStoryFetchFields: ['ObjectID','FormattedID','Name','Feature','PlanEstimate','Iteration','Name','StartDate','EndDate'],
     
     launch: function() {
 
@@ -201,9 +494,14 @@ Ext.define('CustomApp', {
     _run: function(){
         var release_filter = this.cbRelease.getQueryFromSelected();
         var feature_filter = this.cbFeatureFilter.getValue();
-        this.logger.log('_run: release_filter', release_filter.toString(), 'feature_filter', feature_filter);
+        this.logger.log('_run: release_filter', release_filter.toString(), 'feature_filter', feature_filter,this.cbRelease.getRecord().get('ReleaseStartDate'));
         
         var treeStore = Ext.create('Rally.technicalservices.data.ArtifactTree',{});
+        
+        treeStore.releaseStartDate = this.cbRelease.getRecord().get('ReleaseStartDate');
+        treeStore.releaseEndDate = this.cbRelease.getRecord().get('ReleaseDate');
+        treeStore.parentField = this._getPortfolioItemFieldName();
+        
         this._fetchPortfolioItems(release_filter, feature_filter).then({
             scope: this,
             success: function(pi_data){
@@ -215,6 +513,7 @@ Ext.define('CustomApp', {
                         this.logger.log('fetchUserStories success', user_story_data);
                         treeStore.inputData[1] = user_story_data;  
                         treeStore.build();
+                        this._createTree(treeStore);
                     },
                     failure: function(error){
                         this.logger.log('_fetchUserStories return error',error);
@@ -315,6 +614,18 @@ Ext.define('CustomApp', {
             }
         });
         return deferred;
+    },
+    _createTree: function(tree_store){
+            
+            var tree = this.add({
+                xtype:'treepanel',
+                store: tree_store,
+                cls: 'rally-grid',
+                rootVisible: false,
+                rowLines: true,
+                height: this.height,
+                columns: tree_store.columns
+            });
     }
 });
             

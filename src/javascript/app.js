@@ -11,7 +11,7 @@ Ext.define('CustomApp', {
     portfolioItemType: 'PortfolioItem/Feature',
     portfolioItemFilterField: 'c_FeatureType',
     portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name'],
-    userStoryFetchFields: ['ObjectID','FormattedID','Name','PlanEstimate','Iteration','Name','StartDate','EndDate'],
+    userStoryFetchFields: ['ObjectID','FormattedID','Name','Feature','PlanEstimate','Iteration','Name','StartDate','EndDate'],
     
     launch: function() {
 
@@ -49,9 +49,14 @@ Ext.define('CustomApp', {
     _run: function(){
         var release_filter = this.cbRelease.getQueryFromSelected();
         var feature_filter = this.cbFeatureFilter.getValue();
-        this.logger.log('_run: release_filter', release_filter.toString(), 'feature_filter', feature_filter);
+        this.logger.log('_run: release_filter', release_filter.toString(), 'feature_filter', feature_filter,this.cbRelease.getRecord().get('ReleaseStartDate'));
         
         var treeStore = Ext.create('Rally.technicalservices.data.ArtifactTree',{});
+        
+        treeStore.releaseStartDate = this.cbRelease.getRecord().get('ReleaseStartDate');
+        treeStore.releaseEndDate = this.cbRelease.getRecord().get('ReleaseDate');
+        treeStore.parentField = this._getPortfolioItemFieldName();
+        
         this._fetchPortfolioItems(release_filter, feature_filter).then({
             scope: this,
             success: function(pi_data){
@@ -63,6 +68,7 @@ Ext.define('CustomApp', {
                         this.logger.log('fetchUserStories success', user_story_data);
                         treeStore.inputData[1] = user_story_data;  
                         treeStore.build();
+                        this._createTree(treeStore);
                     },
                     failure: function(error){
                         this.logger.log('_fetchUserStories return error',error);
@@ -163,5 +169,17 @@ Ext.define('CustomApp', {
             }
         });
         return deferred;
+    },
+    _createTree: function(tree_store){
+            
+            var tree = this.add({
+                xtype:'treepanel',
+                store: tree_store,
+                cls: 'rally-grid',
+                rootVisible: false,
+                rowLines: true,
+                height: this.height,
+                columns: tree_store.columns
+            });
     }
 });
