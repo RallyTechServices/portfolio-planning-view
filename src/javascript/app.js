@@ -11,8 +11,9 @@ Ext.define('CustomApp', {
     portfolioItemType: 'PortfolioItem/Feature',
     portfolioItemFilterField: 'c_FeatureType',
     portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name'],
-    userStoryFetchFields: ['ObjectID','FormattedID','Name','Feature','PlanEstimate','Iteration','Name','StartDate','EndDate'],
-    
+    userStoryFetchFields: ['ObjectID','FormattedID','Name','Feature','PlanEstimate','Iteration','Name'],
+    unscheduledFieldName: 'Unscheduled',
+    outsideReleaseFieldName: 'OutsideRelease',
     launch: function() {
 
         this.cbRelease = this.down('#criteria_box').add({
@@ -51,24 +52,51 @@ Ext.define('CustomApp', {
         var feature_filter = this.cbFeatureFilter.getValue();
         this.logger.log('_run: release_filter', release_filter.toString(), 'feature_filter', feature_filter,this.cbRelease.getRecord().get('ReleaseStartDate'));
         
-        var treeStore = Ext.create('Rally.technicalservices.data.ArtifactTree',{});
         
-        treeStore.releaseStartDate = this.cbRelease.getRecord().get('ReleaseStartDate');
-        treeStore.releaseEndDate = this.cbRelease.getRecord().get('ReleaseDate');
-        treeStore.parentField = this._getPortfolioItemFieldName();
+        var release_start_date = this.cbRelease.getRecord().get('ReleaseStartDate');
+        var release_end_date = this.cbRelease.getRecord().get('ReleaseDate');
         
         this._fetchPortfolioItems(release_filter, feature_filter).then({
             scope: this,
             success: function(pi_data){
                 this.logger.log('fetchPortfolioItems success', pi_data);
-                treeStore.inputData[0] = pi_data;
                 this._fetchUserStories(pi_data).then({
                     scope: this,
                     success: function(user_story_data){
                         this.logger.log('fetchUserStories success', user_story_data);
-                        treeStore.inputData[1] = user_story_data;  
-                        treeStore.build();
-                        this._createTree(treeStore);
+                        this._fetchIterations(release_start_date, release_end_date, this.unscheduledFieldName, this.outsideReleaseFieldName).then({
+                            scope: this,
+                            success: function(){
+                                this.logger.log('_fetchIterations', this.iterationMap);
+                                var columns = this._constructColumns();
+                                
+                                var inputData = [pi_data, user_story_data];
+                                var root = this.buildRoot(this._getPortfolioItemFieldName(),inputData,this.unscheduledFieldName,this.outsideReleaseFieldName);
+                                
+                                var model_fields = [];
+                                model_fields.push({name: 'FormattedID'});
+                                model_fields.push({name: 'Name'});
+                                Ext.each(Object.keys(this.iterationMap), function(key){
+                                    model_fields.push({name: key});
+                                });
+                                model_fields.push({name: this.unscheduledFieldName});
+                                model_fields.push({name: this.outsideReleaseFieldName});
+                                
+                                Ext.define('IterationTreeModel', {
+                                    extend: 'Ext.data.Model',
+                                    fields: model_fields
+                                });
+                                
+                                var treeStore = Ext.create('Ext.data.TreeStore',{
+                                    model: IterationTreeModel,
+                                    root: {expanded: true, children: root}
+                                });
+                                this._createTree(treeStore, columns);
+                            },
+                            failure: function(error){
+                                this.logger.log('_fetchIterations return error', error);
+                            }
+                        });
                     },
                     failure: function(error){
                         this.logger.log('_fetchUserStories return error',error);
@@ -147,14 +175,64 @@ Ext.define('CustomApp', {
         });
         return deferred;
     },
-    _createWsapiStore: function(model, fetch, filter){
+    _fetchIterations: function(releaseStartDate, releaseEndDate, unscheduledFieldName, outsideReleaseFieldName){
+        var deferred = Ext.create('Deft.Deferred');
+        
+        var filters = Ext.create('Rally.data.wsapi.Filter',{
+            property: 'StartDate',
+            operator: '<',
+            value: Rally.util.DateTime.toIsoString(new Date(releaseEndDate))
+        });
+        filters = filters.and(Ext.create('Rally.data.wsapi.Filter',{
+            property: 'EndDate',
+            operator: '>',
+            value: Rally.util.DateTime.toIsoString(new Date(releaseStartDate))
+        }));
+        var sorter = [{
+                property: 'StartDate',
+                direction: 'ASC'
+        }];
+        var context = {projectScopeDown: false};
+        this.logger.log('_fetchIterations',filters.toString(),sorter);
+        var fetch = ['Name','StartDate','EndDate','ObjectID'];
+        this._createWsapiStore('Iteration',fetch, filters, sorter, context).then({
+            scope: this,
+            success: function(data){
+               // var iterations = [];
+                this.iterationMap = {};
+                Ext.each(data, function(d){
+                    var iteration = 'I' + d.get('ObjectID');
+                    this.iterationMap[iteration] = d.get('Name');
+                //    iterations.push(iteration);
+                },this);
+                
+                //console.log(iterations);               
+                //iterations.push(unscheduledFieldName);
+                //iterations.push(outsideReleaseFieldName);
+                deferred.resolve();
+            },
+            failure: function(error){
+                deferred.reject('Error fetching Iterations: ' + error);
+            }
+        });
+        return deferred; 
+    },
+    _createWsapiStore: function(model, fetch, filter,sorter,context){
         this.logger.log('_createWsapiStore',model, fetch,filter.toString());
+        if (sorter == undefined){
+            sorter=[{property: 'ObjectID', direction: 'ASC'}];
+        }
+        if (context == undefined){
+            context = {};
+        }
         var deferred = Ext.create('Deft.Deferred');
         Ext.create('Rally.data.wsapi.Store',{
             model: model,
             fetch: fetch,
             autoLoad: true,
             filters: filter,
+            sorter: sorter,
+            context: context,
             limit: 'Infinity',
             listeners: {
                 scope: this,
@@ -170,7 +248,8 @@ Ext.define('CustomApp', {
         });
         return deferred;
     },
-    _createTree: function(tree_store){
+    
+    _createTree: function(tree_store, columns){
             
             var tree = this.add({
                 xtype:'treepanel',
@@ -179,7 +258,68 @@ Ext.define('CustomApp', {
                 rootVisible: false,
                 rowLines: true,
                 height: this.height,
-                columns: tree_store.columns
+                columns: columns
             });
+    },
+
+    _constructColumns: function(){
+        var columns = [
+                       {
+                           xtype: 'treecolumn',
+                           text: 'Item',
+                           dataIndex: 'FormattedID',
+                           itemId: 'tree_column',
+                           width: 300
+                       }];
+        
+        Ext.each(Object.keys(this.iterationMap), function(key){
+            columns.push({
+                text: this.iterationMap[key],
+                dataIndex: key
+            });
+        },this);
+        
+        columns.push({text:this.unscheduledFieldName, dataIndex: this.unscheduledFieldName});
+        columns.push({text:this.outsideReleaseFieldName, dataIndex: this.outsideReleaseFieldName});
+        
+        this.logger.log('_constructColumns',columns);
+        return columns; 
+    },
+    buildRoot: function(parentField, inputData,iterations,unscheduledIterationName, outsideReleaseIterationName){
+        this.logger.log('buildRoot', inputData);
+        var model_hash = Rally.technicalservices.util.TreeBuilding.prepareModelHash(inputData,parentField);
+        
+        this.logger.log(iterations);
+        
+        model_hash = this._addColumnsAndBucketData(model_hash, iterations,unscheduledIterationName,outsideReleaseIterationName);
+        var root_array = Rally.technicalservices.util.TreeBuilding.constructRootItems(model_hash);
+        root_array = Rally.technicalservices.util.TreeBuilding.convertModelsToHashes(root_array);
+        this.logger.log('build: root_array',root_array);
+        return root_array; 
+    },
+
+    _addColumnsAndBucketData: function(model_hash,iterations,unscheduledIterationName, outsideReleaseIterationName){
+        this.logger.log('_addColumnsAndBucketData', this.iterationMap);
+        
+        Ext.Object.each(model_hash, function(key, model){
+            Ext.each(iterations, function(iteration){
+                model.set(iteration, 0);
+            });
+
+            var model_iteration = unscheduledIterationName;
+            if (model.get('Iteration')){
+                model_iteration = outsideReleaseIterationName;
+                var iteration_name = model.get('Iteration').Name;
+                Ext.Object.each(this.iterationMap, function(key,value){
+                    if (value == iteration_name){
+                        model_iteration = key;
+                    }
+                },this);
+            }
+            if (model.get('PlanEstimate')){
+                model.set(model_iteration,model.get('PlanEstimate'));
+            } 
+        }, this);
+        return model_hash; 
     }
 });

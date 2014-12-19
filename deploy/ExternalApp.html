@@ -3,10 +3,10 @@
 <head>
     <title>Portfolio Planning View</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Wed Dec 17 2014 20:44:18 GMT-0800 (PST) -->
+    <!--  Build Date: Fri Dec 19 2014 11:21:13 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Wed Dec 17 2014 20:44:18 GMT-0800 (PST)";
+        var APP_BUILD_DATE = "Fri Dec 19 2014 11:21:13 GMT-0800 (PST)";
         var CHECKSUM = [%= checksum %];
     </script>
     
@@ -340,109 +340,6 @@ Ext.define('Rally.technicalservices.util.TreeBuilding', {
         }
     }
 });
-Ext.define('Rally.technicalservices.data.ArtifactTreeModel',{
-    extend: 'Ext.data.Model',
-    fields: [
-        { name: 'FormattedID', type: 'String' },
-        { name: 'Name', type:'String' },
-        { name: '_ref', type:'String' },
-        { name: '_type', type:'String' }
-    ]
-});
-
-Ext.define('Rally.technicalservices.data.ArtifactTree',{
-    extend: 'Ext.data.TreeStore',
-    requires: ['Rally.technicalservices.util.TreeBuilding'],
-    logger: new Rally.technicalservices.Logger(),
-    inputData: null,
-    parentField: 'Feature',
-    releaseStartDate: null,
-    releaseEndDate: null, 
-    constructor: function(config) {
-        this.config = Ext.apply({}, config);
-        this.inputData = []; 
-    },
-    build: function(){
-        this.logger.log('Rally.technicalservices.data.ArtifactTree.build', this.inputData);
-        var model_hash = Rally.technicalservices.util.TreeBuilding.prepareModelHash(this.inputData, this.parentField);
-        var iterations = this._getIterations(model_hash,this.releaseStartDate, this.releaseEndDate);
-        
-        this.logger.log(iterations);
-        iterations['Unscheduled'] = {Name: 'Unscheduled'};
-        iterations['OutsideReleaseWindow'] = {Name: 'Outside Release Window'};
-        
-        model_hash = this._addColumnsAndBucketData(model_hash, iterations);
-        var root_array = Rally.technicalservices.util.TreeBuilding.constructRootItems(model_hash);
-        this.logger.log('build: root_array',root_array);
-        
-        var model_config = {
-                extend: 'Rally.technicalservices.data.ArtifactTreeModel',
-                fields: Object.keys(iterations)
-        };
-        
-        Ext.define('TSIterationTreeModelWithAdditions', model_config);
-        this.model = TSIterationTreeModelWithAdditions;
-        this.root = {expanded: false, children: root_array};
-        
-        this.columns = this._buildColumns(iterations);
-    },
-    _getIterations: function(model_hash, releaseStartDate, releaseEndDate){
-        var iterations = {};  
-        Ext.Object.each(model_hash, function(model){
-            var iteration = model_hash[model].get('Iteration');
-            if (iteration){
-                var key = iteration.Name; //Assumes Name is unique and all itertions with the same name ahve the same start and end dates
-                console.log(key,Ext.Array.contains(Object.keys(iterations),key),this._dateWithinRange(iteration.StartDate, iteration.EndDate, releaseStartDate, releaseEndDate));
-                if (key.length > 0 && !Ext.Array.contains(Object.keys(iterations),key) && 
-                        (this._dateWithinRange(iteration.StartDate, iteration.EndDate, releaseStartDate, releaseEndDate))){
-                    iterations[key]={Name: iteration.Name, StartDate: iteration.StartDate, EndDate: iteration.EndDate};
-                }
-            }
-        },this);
-        return iterations; 
-    },
-    _dateWithinRange: function(startDate, endDate, rangeStartDate, rangeEndDate){
-        var start = Rally.util.DateTime.fromIsoString(startDate);
-        var end = Rally.util.DateTime.fromIsoString(endDate);
-        var rangeStart = Rally.util.DateTime.fromIsoString(rangeStartDate);
-        var rangeEnd = Rally.util.DateTime.fromIsoString(rangeEndDate);
-        this.logger.log('_dateWithinRange', start, end, rangeStart, rangeEnd,(start < rangeEndDate && end > rangeStartDate) );
-        return (start < rangeEndDate && end > rangeStartDate);
-    },
-    _addColumnsAndBucketData: function(model_hash,iterations){
-        Ext.Object.each(model_hash, function(key, model){
-            Ext.Object.each(iterations, function(ikey, iteration){
-                model.set(iteration.Name, 0);
-            });
-            var model_iteration = 'Unscheduled';
-            if (model.get('Iteration')){
-                model_iteration = 'OutsideReleaseWindow';
-                if (Ext.Array.contains(Object.keys(iterations),model.get('Iteration').Name)){
-                    model_iteration = model.get('Iteration').Name;
-                }
-            }
-            if (model.get('PlanEstimate')){
-                model[model_iteration]= model.get('PlanEstimate');
-            } 
-        });
-        return model_hash; 
-    },
-    _buildColumns: function(iterations){
-        var columns = [
-                       {
-                           xtype: 'treecolumn',
-                           text: 'Item',
-                           dataIndex: 'ObjectID',
-                           itemId: 'tree_column',
-                           renderer: function(v,m,r){
-                               return r.get('FormattedID') + ': ' + r.get('Name');
-                           },
-                           width: 400,
-                           menuDisabled: true
-                       }];
-        return columns; 
-    }
-});
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
@@ -456,8 +353,9 @@ Ext.define('CustomApp', {
     portfolioItemType: 'PortfolioItem/Feature',
     portfolioItemFilterField: 'c_FeatureType',
     portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name'],
-    userStoryFetchFields: ['ObjectID','FormattedID','Name','Feature','PlanEstimate','Iteration','Name','StartDate','EndDate'],
-    
+    userStoryFetchFields: ['ObjectID','FormattedID','Name','Feature','PlanEstimate','Iteration','Name'],
+    unscheduledFieldName: 'Unscheduled',
+    outsideReleaseFieldName: 'OutsideRelease',
     launch: function() {
 
         this.cbRelease = this.down('#criteria_box').add({
@@ -496,24 +394,51 @@ Ext.define('CustomApp', {
         var feature_filter = this.cbFeatureFilter.getValue();
         this.logger.log('_run: release_filter', release_filter.toString(), 'feature_filter', feature_filter,this.cbRelease.getRecord().get('ReleaseStartDate'));
         
-        var treeStore = Ext.create('Rally.technicalservices.data.ArtifactTree',{});
         
-        treeStore.releaseStartDate = this.cbRelease.getRecord().get('ReleaseStartDate');
-        treeStore.releaseEndDate = this.cbRelease.getRecord().get('ReleaseDate');
-        treeStore.parentField = this._getPortfolioItemFieldName();
+        var release_start_date = this.cbRelease.getRecord().get('ReleaseStartDate');
+        var release_end_date = this.cbRelease.getRecord().get('ReleaseDate');
         
         this._fetchPortfolioItems(release_filter, feature_filter).then({
             scope: this,
             success: function(pi_data){
                 this.logger.log('fetchPortfolioItems success', pi_data);
-                treeStore.inputData[0] = pi_data;
                 this._fetchUserStories(pi_data).then({
                     scope: this,
                     success: function(user_story_data){
                         this.logger.log('fetchUserStories success', user_story_data);
-                        treeStore.inputData[1] = user_story_data;  
-                        treeStore.build();
-                        this._createTree(treeStore);
+                        this._fetchIterations(release_start_date, release_end_date, this.unscheduledFieldName, this.outsideReleaseFieldName).then({
+                            scope: this,
+                            success: function(){
+                                this.logger.log('_fetchIterations', this.iterationMap);
+                                var columns = this._constructColumns();
+                                
+                                var inputData = [pi_data, user_story_data];
+                                var root = this.buildRoot(this._getPortfolioItemFieldName(),inputData,this.unscheduledFieldName,this.outsideReleaseFieldName);
+                                
+                                var model_fields = [];
+                                model_fields.push({name: 'FormattedID'});
+                                model_fields.push({name: 'Name'});
+                                Ext.each(Object.keys(this.iterationMap), function(key){
+                                    model_fields.push({name: key});
+                                });
+                                model_fields.push({name: this.unscheduledFieldName});
+                                model_fields.push({name: this.outsideReleaseFieldName});
+                                
+                                Ext.define('IterationTreeModel', {
+                                    extend: 'Ext.data.Model',
+                                    fields: model_fields
+                                });
+                                
+                                var treeStore = Ext.create('Ext.data.TreeStore',{
+                                    model: IterationTreeModel,
+                                    root: {expanded: true, children: root}
+                                });
+                                this._createTree(treeStore, columns);
+                            },
+                            failure: function(error){
+                                this.logger.log('_fetchIterations return error', error);
+                            }
+                        });
                     },
                     failure: function(error){
                         this.logger.log('_fetchUserStories return error',error);
@@ -592,14 +517,64 @@ Ext.define('CustomApp', {
         });
         return deferred;
     },
-    _createWsapiStore: function(model, fetch, filter){
+    _fetchIterations: function(releaseStartDate, releaseEndDate, unscheduledFieldName, outsideReleaseFieldName){
+        var deferred = Ext.create('Deft.Deferred');
+        
+        var filters = Ext.create('Rally.data.wsapi.Filter',{
+            property: 'StartDate',
+            operator: '<',
+            value: Rally.util.DateTime.toIsoString(new Date(releaseEndDate))
+        });
+        filters = filters.and(Ext.create('Rally.data.wsapi.Filter',{
+            property: 'EndDate',
+            operator: '>',
+            value: Rally.util.DateTime.toIsoString(new Date(releaseStartDate))
+        }));
+        var sorter = [{
+                property: 'StartDate',
+                direction: 'ASC'
+        }];
+        var context = {projectScopeDown: false};
+        this.logger.log('_fetchIterations',filters.toString(),sorter);
+        var fetch = ['Name','StartDate','EndDate','ObjectID'];
+        this._createWsapiStore('Iteration',fetch, filters, sorter, context).then({
+            scope: this,
+            success: function(data){
+               // var iterations = [];
+                this.iterationMap = {};
+                Ext.each(data, function(d){
+                    var iteration = 'I' + d.get('ObjectID');
+                    this.iterationMap[iteration] = d.get('Name');
+                //    iterations.push(iteration);
+                },this);
+                
+                //console.log(iterations);               
+                //iterations.push(unscheduledFieldName);
+                //iterations.push(outsideReleaseFieldName);
+                deferred.resolve();
+            },
+            failure: function(error){
+                deferred.reject('Error fetching Iterations: ' + error);
+            }
+        });
+        return deferred; 
+    },
+    _createWsapiStore: function(model, fetch, filter,sorter,context){
         this.logger.log('_createWsapiStore',model, fetch,filter.toString());
+        if (sorter == undefined){
+            sorter=[{property: 'ObjectID', direction: 'ASC'}];
+        }
+        if (context == undefined){
+            context = {};
+        }
         var deferred = Ext.create('Deft.Deferred');
         Ext.create('Rally.data.wsapi.Store',{
             model: model,
             fetch: fetch,
             autoLoad: true,
             filters: filter,
+            sorter: sorter,
+            context: context,
             limit: 'Infinity',
             listeners: {
                 scope: this,
@@ -615,7 +590,8 @@ Ext.define('CustomApp', {
         });
         return deferred;
     },
-    _createTree: function(tree_store){
+    
+    _createTree: function(tree_store, columns){
             
             var tree = this.add({
                 xtype:'treepanel',
@@ -624,8 +600,69 @@ Ext.define('CustomApp', {
                 rootVisible: false,
                 rowLines: true,
                 height: this.height,
-                columns: tree_store.columns
+                columns: columns
             });
+    },
+
+    _constructColumns: function(){
+        var columns = [
+                       {
+                           xtype: 'treecolumn',
+                           text: 'Item',
+                           dataIndex: 'FormattedID',
+                           itemId: 'tree_column',
+                           width: 300
+                       }];
+        
+        Ext.each(Object.keys(this.iterationMap), function(key){
+            columns.push({
+                text: this.iterationMap[key],
+                dataIndex: key
+            });
+        },this);
+        
+        columns.push({text:this.unscheduledFieldName, dataIndex: this.unscheduledFieldName});
+        columns.push({text:this.outsideReleaseFieldName, dataIndex: this.outsideReleaseFieldName});
+        
+        this.logger.log('_constructColumns',columns);
+        return columns; 
+    },
+    buildRoot: function(parentField, inputData,iterations,unscheduledIterationName, outsideReleaseIterationName){
+        this.logger.log('buildRoot', inputData);
+        var model_hash = Rally.technicalservices.util.TreeBuilding.prepareModelHash(inputData,parentField);
+        
+        this.logger.log(iterations);
+        
+        model_hash = this._addColumnsAndBucketData(model_hash, iterations,unscheduledIterationName,outsideReleaseIterationName);
+        var root_array = Rally.technicalservices.util.TreeBuilding.constructRootItems(model_hash);
+        root_array = Rally.technicalservices.util.TreeBuilding.convertModelsToHashes(root_array);
+        this.logger.log('build: root_array',root_array);
+        return root_array; 
+    },
+
+    _addColumnsAndBucketData: function(model_hash,iterations,unscheduledIterationName, outsideReleaseIterationName){
+        this.logger.log('_addColumnsAndBucketData', this.iterationMap);
+        
+        Ext.Object.each(model_hash, function(key, model){
+            Ext.each(iterations, function(iteration){
+                model.set(iteration, 0);
+            });
+
+            var model_iteration = unscheduledIterationName;
+            if (model.get('Iteration')){
+                model_iteration = outsideReleaseIterationName;
+                var iteration_name = model.get('Iteration').Name;
+                Ext.Object.each(this.iterationMap, function(key,value){
+                    if (value == iteration_name){
+                        model_iteration = key;
+                    }
+                },this);
+            }
+            if (model.get('PlanEstimate')){
+                model.set(model_iteration,model.get('PlanEstimate'));
+            } 
+        }, this);
+        return model_hash; 
     }
 });
             
