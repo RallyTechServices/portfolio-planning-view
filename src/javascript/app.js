@@ -51,7 +51,7 @@ Ext.define('CustomApp', {
         var release_filter = this.cbRelease.getQueryFromSelected();
         var feature_filter = this.cbFeatureFilter.getValue();
         this.logger.log('_run: release_filter', release_filter.toString(), 'feature_filter', feature_filter,this.cbRelease.getRecord().get('ReleaseStartDate'));
-        
+        this.setLoading(true);
         
         var release_start_date = this.cbRelease.getRecord().get('ReleaseStartDate');
         var release_end_date = this.cbRelease.getRecord().get('ReleaseDate');
@@ -92,19 +92,23 @@ Ext.define('CustomApp', {
                                     root: {expanded: true, children: root}
                                 });
                                 this._createTree(treeStore, columns);
+                                this.setLoading(false);
                             },
                             failure: function(error){
                                 this.logger.log('_fetchIterations return error', error);
+                                this.setLoading(false);
                             }
                         });
                     },
                     failure: function(error){
                         this.logger.log('_fetchUserStories return error',error);
+                        this.setLoading(false);
                     }
                 });
             },
             failure: function(error){
                 this.logger.log('_fetchPortfolioItems return error',error);
+                this.setLoading(false);
             }
         });
     },
@@ -289,37 +293,43 @@ Ext.define('CustomApp', {
         this.logger.log('buildRoot', inputData);
         var model_hash = Rally.technicalservices.util.TreeBuilding.prepareModelHash(inputData,parentField);
         
-        this.logger.log(iterations);
-        
-        model_hash = this._addColumnsAndBucketData(model_hash, iterations,unscheduledIterationName,outsideReleaseIterationName);
+        model_hash = this._addColumnsAndBucketData(model_hash);
         var root_array = Rally.technicalservices.util.TreeBuilding.constructRootItems(model_hash);
+        
+        Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: this.unscheduledFieldName, leaves_only: true, calculator: function(item){return item.get(this.unscheduledFieldName) || 0;}});
+        Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: this.outsideReleaseFieldName, leaves_only: true, calculator:function(item){return item.get(this.outsideReleaseFieldName) || 0;}});
+        Ext.each(Object.keys(this.iterationMap),function(key){
+            Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: key, leaves_only: true, calculator: function(item){return item.get(key) || 0;}});
+            
+        },this);
         root_array = Rally.technicalservices.util.TreeBuilding.convertModelsToHashes(root_array);
         this.logger.log('build: root_array',root_array);
         return root_array; 
     },
 
-    _addColumnsAndBucketData: function(model_hash,iterations,unscheduledIterationName, outsideReleaseIterationName){
-        this.logger.log('_addColumnsAndBucketData', this.iterationMap);
+    _addColumnsAndBucketData: function(model_hash){
         
         Ext.Object.each(model_hash, function(key, model){
-            Ext.each(iterations, function(iteration){
-                model.set(iteration, 0);
+            Ext.each(Object.keys(this.iterationMap), function(key){
+                model.set(key, 0);
             });
-
-            var model_iteration = unscheduledIterationName;
+            model.set(this.unscheduledIterationName,0);
+            model.set(this.outsideReleaseIterationName,0);
+            
+            var model_iteration = this.unscheduledFieldName;
             if (model.get('Iteration')){
-                model_iteration = outsideReleaseIterationName;
+                model_iteration = this.outsideReleaseFieldName;
                 var iteration_name = model.get('Iteration').Name;
-                Ext.Object.each(this.iterationMap, function(key,value){
-                    if (value == iteration_name){
-                        model_iteration = key;
-                    }
-                },this);
+                var key = Ext.Object.getKey(this.iterationMap, iteration_name);
+                if (key){
+                    model_iteration = key;
+                }
             }
             if (model.get('PlanEstimate')){
                 model.set(model_iteration,model.get('PlanEstimate'));
             } 
         }, this);
+        this.logger.log('_addColumnsAndBucketData', model_hash, this.iterationMap);
         return model_hash; 
     }
 });
