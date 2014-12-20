@@ -72,7 +72,7 @@ Ext.define('CustomApp', {
                                 
                                 var inputData = [pi_data, user_story_data];
                                 var root = this.buildRoot(this._getPortfolioItemFieldName(),inputData,this.unscheduledFieldName,this.outsideReleaseFieldName);
-                                
+                                    
                                 var model_fields = [];
                                 model_fields.push({name: 'FormattedID'});
                                 model_fields.push({name: 'Name'});
@@ -202,17 +202,11 @@ Ext.define('CustomApp', {
         this._createWsapiStore('Iteration',fetch, filters, sorter, context).then({
             scope: this,
             success: function(data){
-               // var iterations = [];
                 this.iterationMap = {};
                 Ext.each(data, function(d){
                     var iteration = 'I' + d.get('ObjectID');
                     this.iterationMap[iteration] = d.get('Name');
-                //    iterations.push(iteration);
                 },this);
-                
-                //console.log(iterations);               
-                //iterations.push(unscheduledFieldName);
-                //iterations.push(outsideReleaseFieldName);
                 deferred.resolve();
             },
             failure: function(error){
@@ -267,13 +261,20 @@ Ext.define('CustomApp', {
     },
 
     _constructColumns: function(){
-        var columns = [
-                       {
+        var columns = [{
                            xtype: 'treecolumn',
                            text: 'Item',
                            dataIndex: 'FormattedID',
                            itemId: 'tree_column',
-                           width: 300
+                           flex: 1,
+                           renderer: function(v,m,r){
+                               var text = ''
+                               if (r.get('FormattedID')){
+                                  text += r.get('FormattedID') + ': ';    
+                               }
+                               text += r.get('Name');
+                               return text;
+                           }
                        }];
         
         Ext.each(Object.keys(this.iterationMap), function(key){
@@ -289,22 +290,39 @@ Ext.define('CustomApp', {
         this.logger.log('_constructColumns',columns);
         return columns; 
     },
-    buildRoot: function(parentField, inputData,iterations,unscheduledIterationName, outsideReleaseIterationName){
+    buildRoot: function(parentField, inputData){
         this.logger.log('buildRoot', inputData);
         var model_hash = Rally.technicalservices.util.TreeBuilding.prepareModelHash(inputData,parentField);
         
         model_hash = this._addColumnsAndBucketData(model_hash);
         var root_array = Rally.technicalservices.util.TreeBuilding.constructRootItems(model_hash);
-        
-        Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: this.unscheduledFieldName, leaves_only: true, calculator: function(item){return item.get(this.unscheduledFieldName) || 0;}});
-        Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: this.outsideReleaseFieldName, leaves_only: true, calculator:function(item){return item.get(this.outsideReleaseFieldName) || 0;}});
+
+        var me = this;
+        Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: this.unscheduledFieldName, leaves_only: true, calculator: function(item){return item.get(me.unscheduledFieldName) || 0;}});
+        Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: this.outsideReleaseFieldName, leaves_only: true, calculator:function(item){return item.get(me.outsideReleaseFieldName) || 0;}});
         Ext.each(Object.keys(this.iterationMap),function(key){
             Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: key, leaves_only: true, calculator: function(item){return item.get(key) || 0;}});
-            
         },this);
         root_array = Rally.technicalservices.util.TreeBuilding.convertModelsToHashes(root_array);
-        this.logger.log('build: root_array',root_array);
-        return root_array; 
+        
+        var total_root = {};
+        total_root['Name'] = 'Total';
+        Ext.each(Object.keys(this.iterationMap), function(key){
+            total_root[key] = 0;
+        });
+        total_root[this.unscheduledFieldName] =0 ;
+        total_root[this.outsideReleaseFieldName] = 0;
+        Ext.each(root_array, function(item){
+            Ext.each(Object.keys(this.iterationMap), function(key){
+                total_root[key] += item[key] ;
+            });
+            total_root[this.unscheduledFieldName] += item[this.unscheduledFieldName];
+            total_root[this.outsideReleaseFieldName] += item[this.outsideReleaseFieldName];
+        },this);
+        total_root['children'] = root_array;
+        total_root['expanded'] = true;
+        this.logger.log('build: root_array',total_root);
+        return total_root; 
     },
 
     _addColumnsAndBucketData: function(model_hash){
@@ -313,8 +331,8 @@ Ext.define('CustomApp', {
             Ext.each(Object.keys(this.iterationMap), function(key){
                 model.set(key, 0);
             });
-            model.set(this.unscheduledIterationName,0);
-            model.set(this.outsideReleaseIterationName,0);
+            model.set(this.unscheduledFieldName,0);
+            model.set(this.outsideReleaseFieldName,0);
             
             var model_iteration = this.unscheduledFieldName;
             if (model.get('Iteration')){

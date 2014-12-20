@@ -135,6 +135,7 @@ Ext.define('Rally.technicalservices.util.TreeBuilding', {
      */
     rollup: function(config){
         Ext.Array.each(config.root_items,function(root_item){
+     //       console.log(root_item, root_item.get(config.field_name),root_item.get('FormattedID'));
             this._setValueFromChildren(root_item,config.field_name,config.calculator,config.leaves_only);
         },this);
         return config.root_items;
