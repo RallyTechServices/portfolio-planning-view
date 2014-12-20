@@ -142,6 +142,10 @@ Ext.define('CustomApp', {
         this.logger.log('_fetchUserStories', portfolio_items_data);
         var deferred = Ext.create('Deft.Deferred');
         
+        if (portfolio_items_data.length == 0){
+            deferred.resolve([]);
+        }
+        
         var pi_ancestor_field_name = this._getPortfolioItemFieldName() + '.ObjectID';
         var filters = []; 
         var idx = -1;
@@ -249,8 +253,13 @@ Ext.define('CustomApp', {
     
     _createTree: function(tree_store, columns){
             
+            if (this.down('#feature-tree')){
+                this.down('#feature-tree').destroy();
+            }
+        
             var tree = this.add({
                 xtype:'treepanel',
+                itemId: 'feature-tree',
                 store: tree_store,
                 cls: 'rally-grid',
                 rootVisible: false,

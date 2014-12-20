@@ -3,11 +3,11 @@
 <head>
     <title>Portfolio Planning View</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Fri Dec 19 2014 16:32:05 GMT-0800 (PST) -->
+    <!--  Build Date: Fri Dec 19 2014 16:42:16 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Fri Dec 19 2014 16:32:05 GMT-0800 (PST)";
-        var CHECKSUM = 15657359696;
+        var APP_BUILD_DATE = "Fri Dec 19 2014 16:42:16 GMT-0800 (PST)";
+        var CHECKSUM = 15904513358;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc3/sdk.js"></script>
@@ -485,6 +485,10 @@ Ext.define('CustomApp', {
         this.logger.log('_fetchUserStories', portfolio_items_data);
         var deferred = Ext.create('Deft.Deferred');
         
+        if (portfolio_items_data.length == 0){
+            deferred.resolve([]);
+        }
+        
         var pi_ancestor_field_name = this._getPortfolioItemFieldName() + '.ObjectID';
         var filters = []; 
         var idx = -1;
@@ -592,8 +596,13 @@ Ext.define('CustomApp', {
     
     _createTree: function(tree_store, columns){
             
+            if (this.down('#feature-tree')){
+                this.down('#feature-tree').destroy();
+            }
+        
             var tree = this.add({
                 xtype:'treepanel',
+                itemId: 'feature-tree',
                 store: tree_store,
                 cls: 'rally-grid',
                 rootVisible: false,
