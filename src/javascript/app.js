@@ -41,6 +41,7 @@ Ext.define('CustomApp', {
         
         this.down('#criteria_box').add({
             xtype: 'rallybutton',
+            itemId: 'btn-apply',
             text: 'Apply',
             scope: this,
             handler: this._run,
@@ -50,8 +51,10 @@ Ext.define('CustomApp', {
         this.down('#criteria_box').add({
             xtype: 'rallybutton',
             text: 'Export',
+            itemId: 'btn-export',
             scope: this,
             handler: this._export,
+            disabled: true,
             margin: 10
         });
     },
@@ -94,11 +97,17 @@ Ext.define('CustomApp', {
         },this);
         return text;  
     },
+    _readyWindow: function(disable, success){
+        this.setLoading(disable);
+        this.down('#btn-apply').setDisabled(disable);
+        this.down('#btn-export').setDisabled(disable || !success);
+    },
     _run: function(){
         var release_filter = this.cbRelease.getQueryFromSelected();
         var feature_filter = this.cbFeatureFilter.getValue();
         this.logger.log('_run: release_filter', release_filter.toString(), 'feature_filter', feature_filter,this.cbRelease.getRecord().get('ReleaseStartDate'));
-        this.setLoading(true);
+        
+        this._readyWindow(true, false);  
         
         var release_start_date = this.cbRelease.getRecord().get('ReleaseStartDate');
         var release_end_date = this.cbRelease.getRecord().get('ReleaseDate');
@@ -139,23 +148,23 @@ Ext.define('CustomApp', {
                                     root: {expanded: true, children: root}
                                 });
                                 this._createTree(treeStore, columns);
-                                this.setLoading(false);
+                                this._readyWindow(false, true);  
                             },
                             failure: function(error){
                                 this.logger.log('_fetchIterations return error', error);
-                                this.setLoading(false);
+                                this._readyWindow(false, false);  
                             }
                         });
                     },
                     failure: function(error){
                         this.logger.log('_fetchUserStories return error',error);
-                        this.setLoading(false);
+                        this._readyWindow(false, false);  
                     }
                 });
             },
             failure: function(error){
                 this.logger.log('_fetchPortfolioItems return error',error);
-                this.setLoading(false);
+                this._readyWindow(false, false);  
             }
         });
     },
