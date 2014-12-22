@@ -3,11 +3,11 @@
 <head>
     <title>Portfolio Planning View</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Mon Dec 22 2014 11:50:59 GMT-0700 (MST) -->
+    <!--  Build Date: Mon Dec 22 2014 11:52:04 GMT-0700 (MST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Mon Dec 22 2014 11:50:59 GMT-0700 (MST)";
-        var CHECKSUM = 21881300882;
+        var APP_BUILD_DATE = "Mon Dec 22 2014 11:52:04 GMT-0700 (MST)";
+        var CHECKSUM = 21881297704;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc3/sdk.js"></script>
