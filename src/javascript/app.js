@@ -46,6 +46,53 @@ Ext.define('CustomApp', {
             handler: this._run,
             margin: 10
         });
+        
+        this.down('#criteria_box').add({
+            xtype: 'rallybutton',
+            text: 'Export',
+            scope: this,
+            handler: this._export,
+            margin: 10
+        });
+    },
+    _export: function(){
+        var file_name = 'portfolio-planning-view-export.csv';
+        var tree_grid = this.down('#feature-tree');
+        var total_node = tree_grid.getStore().getRootNode().getChildAt(0);  
+        var model = tree_grid.getStore().model;
+        this.logger.log('_export tree_store',model.getFields(),total_node);
+
+        var column_keys = [];
+        var text = 'Feature FormattedID,Feature Name,FormattedID,Name,';
+        Ext.each(Object.keys(this.iterationMap), function(key){
+            text += this.iterationMap[key] + ',';
+            column_keys.push(key);
+        },this);
+        column_keys.push(this.unscheduledFieldName);
+        text += this.unscheduledFieldName + ',';
+        column_keys.push(this.outsideReleaseFieldName);
+        text += this.outsideReleaseFieldName + '\n';  
+        //This assumes one level of children under each feature.  If there are nested children, they will only show with the feature, 
+        //but not their parents in the flattened structure
+        Ext.each(total_node.childNodes, function(feature){
+            text += this._exportChildNodes(feature, feature,column_keys);
+        },this);
+        Rally.technicalservices.FileUtilities.saveTextAsFile(text, file_name);
+    },
+    _exportChildNodes: function(feature, parent_node,column_keys){
+        var text = '';
+        if (parent_node.childNodes.length == 0){
+            return text;
+        }
+        Ext.each(parent_node.childNodes, function(child){
+                text += Ext.String.format('{0},\"{1}\",{2},\"{3}\",',feature.get('FormattedID'),feature.get('Name'),child.get('FormattedID'),child.get('Name'));
+                Ext.each(column_keys, function(key){
+                    text += child.get(key) + ',';
+                },this);
+                text = text.replace(/,$/,'\n');
+                text += this._exportChildNodes(feature, child, column_keys);
+        },this);
+        return text;  
     },
     _run: function(){
         var release_filter = this.cbRelease.getQueryFromSelected();
@@ -132,7 +179,6 @@ Ext.define('CustomApp', {
                 this.logger.log('_fetchPortfolioItems _createStore failed', error);
             }
         });
-
         return deferred;  
     },
     _getPortfolioItemFieldName: function(){

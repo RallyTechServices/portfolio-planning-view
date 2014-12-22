@@ -3,11 +3,11 @@
 <head>
     <title>Portfolio Planning View</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Fri Dec 19 2014 16:42:16 GMT-0800 (PST) -->
+    <!--  Build Date: Mon Dec 22 2014 11:43:44 GMT-0700 (MST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Fri Dec 19 2014 16:42:16 GMT-0800 (PST)";
-        var CHECKSUM = 15904513358;
+        var APP_BUILD_DATE = "Mon Dec 22 2014 11:43:44 GMT-0700 (MST)";
+        var CHECKSUM = 21360040849;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc3/sdk.js"></script>
@@ -341,6 +341,61 @@ Ext.define('Rally.technicalservices.util.TreeBuilding', {
         }
     }
 });
+Ext.define('Rally.technicalservices.FileUtilities', {
+    singleton: true,
+    logger: new Rally.technicalservices.Logger(),
+    
+    saveTextAsFile: function(textToWrite, fileName)
+    {
+        var textFileAsBlob = new Blob([textToWrite], {type:'text/plain'});
+        var fileNameToSaveAs = fileName;
+
+        var downloadLink = document.createElement("a");
+        downloadLink.download = fileNameToSaveAs;
+        downloadLink.innerHTML = "Download File";
+        if (window.webkitURL != null)
+        {
+            // Chrome allows the link to be clicked
+            // without actually adding it to the DOM.
+            downloadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
+        }
+        else
+        {
+            // Firefox requires the link to be added to the DOM
+            // before it can be clicked.
+            downloadLink.href = window.URL.createObjectURL(textFileAsBlob);
+            downloadLink.onclick = destroyClickedElement;
+            downloadLink.style.display = "none";
+            document.body.appendChild(downloadLink);
+        }
+        downloadLink.click();
+    },
+    destroyClickedElement: function(event)
+    {
+        document.body.removeChild(event.target);
+    },
+    convertDataArrayToCSVText: function(data_array, requestedFieldHash){
+        var text = '';
+        Ext.each(Object.keys(requestedFieldHash), function(key){
+            text += requestedFieldHash[key] + ',';
+        });
+        text = text.replace(/,$/,'\n');
+        
+        Ext.each(data_array, function(d){
+            Ext.each(Object.keys(requestedFieldHash), function(key){
+                if (d[key]){
+                    if (typeof d[key] === 'object'){
+                        text += Ext.String.format("\"{0}\",",d[key].Name );                    
+                    } else {
+                        text += Ext.String.format("\"{0}\",",d[key] );                    
+                    }
+                }
+            },this);
+            text = text.replace(/,$/,'\n');
+        },this);
+        return text;
+    }
+});
 Ext.define('CustomApp', {
     extend: 'Rally.app.App',
     componentCls: 'app',
@@ -389,6 +444,53 @@ Ext.define('CustomApp', {
             handler: this._run,
             margin: 10
         });
+        
+        this.down('#criteria_box').add({
+            xtype: 'rallybutton',
+            text: 'Export',
+            scope: this,
+            handler: this._export,
+            margin: 10
+        });
+    },
+    _export: function(){
+        var file_name = 'portfolio-planning-view-export.csv';
+        var tree_grid = this.down('#feature-tree');
+        var total_node = tree_grid.getStore().getRootNode().getChildAt(0);  
+        var model = tree_grid.getStore().model;
+        this.logger.log('_export tree_store',model.getFields(),total_node);
+
+        var column_keys = [];
+        var text = 'Feature FormattedID,Feature Name,FormattedID,Name,';
+        Ext.each(Object.keys(this.iterationMap), function(key){
+            text += this.iterationMap[key] + ',';
+            column_keys.push(key);
+        },this);
+        column_keys.push(this.unscheduledFieldName);
+        text += this.unscheduledFieldName + ',';
+        column_keys.push(this.outsideReleaseFieldName);
+        text += this.outsideReleaseFieldName + '\n';  
+        //This assumes one level of children under each feature.  If there are nested children, they will only show with the feature, 
+        //but not their parents in the flattened structure
+        Ext.each(total_node.childNodes, function(feature){
+            text += this._exportChildNodes(feature, feature,column_keys);
+        },this);
+        Rally.technicalservices.FileUtilities.saveTextAsFile(text, file_name);
+    },
+    _exportChildNodes: function(feature, parent_node,column_keys){
+        var text = '';
+        if (parent_node.childNodes.length == 0){
+            return text;
+        }
+        Ext.each(parent_node.childNodes, function(child){
+                text += Ext.String.format('{0},\"{1}\",{2},\"{3}\",',feature.get('FormattedID'),feature.get('Name'),child.get('FormattedID'),child.get('Name'));
+                Ext.each(column_keys, function(key){
+                    text += child.get(key) + ',';
+                },this);
+                text = text.replace(/,$/,'\n');
+                text += this._exportChildNodes(feature, child, column_keys);
+        },this);
+        return text;  
     },
     _run: function(){
         var release_filter = this.cbRelease.getQueryFromSelected();
@@ -475,7 +577,6 @@ Ext.define('CustomApp', {
                 this.logger.log('_fetchPortfolioItems _createStore failed', error);
             }
         });
-
         return deferred;  
     },
     _getPortfolioItemFieldName: function(){
