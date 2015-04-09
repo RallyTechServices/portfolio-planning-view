@@ -8,10 +8,18 @@
     border-radius: 7px;
     text-align: center;
     color: white;
-    background: #C0C0C0;
+    background: #c0c0c0;
     border-style: solid;
     border-width: 1px;
     margin-top: 25px;
     margin-right: 5px;
     cursor: pointer;
+}
+
+.feature {
+    background-color: #ffffff;
+}
+
+.total {
+    background-color: #ffffff;
 }

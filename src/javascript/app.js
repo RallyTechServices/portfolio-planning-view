@@ -10,8 +10,8 @@ Ext.define('CustomApp', {
     ],
     portfolioItemType: 'PortfolioItem/Feature',
     portfolioItemFilterField: 'c_FeatureType',
-    portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name'],
-    userStoryFetchFields: ['ObjectID','FormattedID','Name','Feature','PlanEstimate','Iteration','Name'],
+    portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name','c_FeatureTargetSprint','c_FeatureDeploymentType','c_CodeDeploymentSchedule'],
+    userStoryFetchFields: ['ObjectID','ScheduleState','FormattedID','Name','Feature','PlanEstimate','Iteration','Name'],
     unscheduledFieldName: 'Unscheduled',
     outsideReleaseFieldName: 'OutsideRelease',
     launch: function() {
@@ -132,6 +132,10 @@ Ext.define('CustomApp', {
                                 var model_fields = [];
                                 model_fields.push({name: 'FormattedID'});
                                 model_fields.push({name: 'Name'});
+                                model_fields.push({name: 'ScheduleState'});
+                                model_fields.push({name: 'c_CodeDeploymentSchedule'});
+                                model_fields.push({name: 'c_FeatureTargetSprint'});
+                                model_fields.push({name: 'c_FeatureDeploymentType'});
                                 Ext.each(Object.keys(this.iterationMap), function(key){
                                     model_fields.push({name: key});
                                 });
@@ -326,25 +330,70 @@ Ext.define('CustomApp', {
 
     _constructColumns: function(){
         var columns = [{
-                           xtype: 'treecolumn',
-                           text: 'Item',
-                           dataIndex: 'FormattedID',
-                           itemId: 'tree_column',
-                           flex: 1,
-                           renderer: function(v,m,r){
-                               var text = ''
-                               if (r.get('FormattedID')){
-                                  text += r.get('FormattedID') + ': ';    
-                               }
-                               text += r.get('Name');
-                               return text;
-                           }
-                       }];
+           xtype: 'treecolumn',
+           text: 'Item',
+           dataIndex: 'FormattedID',
+           itemId: 'tree_column',
+           minWidth: 400,
+           flex: 1,
+           renderer: function(v,m,r){
+               console.log(v,r);
+               var text = r.get('Name');
+               if (v && v.length > 0){
+                   text = Ext.String.format("{0}: {1}",r.get('FormattedID'), r.get('Name'));
+               } else {
+                   m.tdCls = "total";
+               }
+
+               if (v && v.length > 0 && r.childNodes.length > 0){
+                   var storyPoints = 0;
+                   m.tdCls = "feature";
+                   return Ext.String.format("<br/>{0}<br/>Feature Target Sprint: <b>{1}</b><br/>Feature Deployment Type: <b>{2}</b><br/>Code Deployment Schedule: <b>{3}</b><br/>Story Points: <b>{4}</b>",
+                       text,
+                       r.get('c_FeatureTargetSprint'),
+                       r.get('c_FeatureDeploymentType'),
+                       r.get('c_CodeDeploymentSchedule'),
+                       storyPoints
+                   );
+               }
+               return text;
+           }
+       },{
+            //xtype: 'templatecolumn',
+            text: 'Schedule State',
+            dataIndex: 'ScheduleState',
+            //tpl: Ext.create('Rally.ui.renderer.template.ScheduleStateTemplate')
+            //renderer: function(v,m,r){
+            //    if (v){
+            //        return v;
+            //    } else {
+            //        if (r.get('FormattedID')){
+            //            m.tdCls = "feature";
+            //        } else {
+            //            m.tdCls = "total";
+            //        }
+            //        return '';
+            //    }
+            //}
+        }];
         
         Ext.each(Object.keys(this.iterationMap), function(key){
             columns.push({
                 text: this.iterationMap[key],
-                dataIndex: key
+                dataIndex: key,
+                renderer: function(v,m,r){
+                    if (r.get('FormattedID')){
+                        if (r.childNodes.length > 0){
+                            m.tdCls = "feature";
+                        }
+                    } else {
+                        m.tdCls = "total";
+                    }
+                    if (v > 0){
+                        return v;
+                    }
+                    return '';
+                }
             });
         },this);
         
