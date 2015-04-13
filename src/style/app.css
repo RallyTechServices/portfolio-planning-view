@@ -22,4 +22,22 @@
 
 .total {
     background-color: #ffffff;
+    border-top-width: 3px;
+    border-top-color: #000000!important;
+    border-top-style: 'solid';
+}
+
+.vertical-grid-header {
+    -ms-transform: rotate(270deg); /* IE 9 */
+    -moz-transform: rotate(270deg); /* Firefox */
+    -webkit-transform: rotate(270deg); /* Safari and Chrome */
+    -o-transform: rotate(270deg); /* Opera */,
+    transform : rotate(90deg);
+    white-space: nowrap; /*whether to display in one line or not*/
+}
+
+.column-style {
+    border-style: solid;
+    border-left-width: 1px;
+    border-left-color: #e0e0e0;
 }
