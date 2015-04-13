@@ -10,8 +10,8 @@ Ext.define('CustomApp', {
     ],
     portfolioItemType: 'PortfolioItem/Feature',
     portfolioItemFilterField: 'c_FeatureType',
-    portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name'],
-    userStoryFetchFields: ['ObjectID','FormattedID','Name','Feature','PlanEstimate','Iteration','Name'],
+    portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name','c_FeatureTargetSprint','c_FeatureDeploymentType','c_CodeDeploymentSchedule'],
+    userStoryFetchFields: ['ObjectID','ScheduleState','FormattedID','Name','Feature','PlanEstimate','Iteration','Name'],
     unscheduledFieldName: 'Unscheduled',
     outsideReleaseFieldName: 'OutsideRelease',
     launch: function() {
@@ -20,6 +20,8 @@ Ext.define('CustomApp', {
             xtype:'rallyreleasecombobox',
             fieldLabel: 'Release',
             labelAlign: 'right',
+            stateful: true,
+            stateId: this.getContext().getScopedStateId('cb-release'),
             width: 350,
             storeConfig: {
                 context: {projectScopeDown: false}
@@ -34,6 +36,8 @@ Ext.define('CustomApp', {
             field: this.portfolioItemFilterField,
             fieldLabel: ff_label,
             labelAlign: 'right',
+            stateful: true,
+            stateId: this.getContext().getScopedStateId('cb-feature'),
             forceSelection: false,
             allowNoEntry: true,
             margin: 10
@@ -61,23 +65,27 @@ Ext.define('CustomApp', {
     _export: function(){
         var file_name = 'portfolio-planning-view-export.csv';
         var tree_grid = this.down('#feature-tree');
-        var total_node = tree_grid.getStore().getRootNode().getChildAt(0);  
+        var featureNodes = tree_grid.getStore().getRootNode().childNodes;
         var model = tree_grid.getStore().model;
-        this.logger.log('_export tree_store',model.getFields(),total_node);
+        this.logger.log('_export tree_store',model.getFields(),featureNodes);
 
         var column_keys = [];
-        var text = 'Feature FormattedID,Feature Name,FormattedID,Name,';
+        var text = 'Feature, User Story, ScheduleState,';
         Ext.each(Object.keys(this.iterationMap), function(key){
             text += this.iterationMap[key] + ',';
             column_keys.push(key);
         },this);
-        column_keys.push(this.unscheduledFieldName);
-        text += this.unscheduledFieldName + ',';
-        column_keys.push(this.outsideReleaseFieldName);
-        text += this.outsideReleaseFieldName + '\n';  
-        //This assumes one level of children under each feature.  If there are nested children, they will only show with the feature, 
+        text = text.replace(/,$/,'\n');
+
+        //This assumes one level of children under each feature.  If there are nested children, they will only show with the feature,
         //but not their parents in the flattened structure
-        Ext.each(total_node.childNodes, function(feature){
+        Ext.each(featureNodes, function(feature){
+            text += Ext.String.format("\"{0}\",,,", this._getFeatureText(feature,true));
+            Ext.each(column_keys, function(key){
+                text += feature.get(key) + ',';
+            },this);
+            text = text.replace(/,$/,'\n');
+
             text += this._exportChildNodes(feature, feature,column_keys);
         },this);
         Rally.technicalservices.FileUtilities.saveTextAsFile(text, file_name);
@@ -88,12 +96,12 @@ Ext.define('CustomApp', {
             return text;
         }
         Ext.each(parent_node.childNodes, function(child){
-                text += Ext.String.format('{0},\"{1}\",{2},\"{3}\",',feature.get('FormattedID'),feature.get('Name'),child.get('FormattedID'),child.get('Name'));
+                text += Ext.String.format('"",\"{0}\",{1},',this._getStoryText(child, true),child.get('ScheduleState'));
                 Ext.each(column_keys, function(key){
                     text += child.get(key) + ',';
                 },this);
                 text = text.replace(/,$/,'\n');
-                text += this._exportChildNodes(feature, child, column_keys);
+                //text += this._exportChildNodes(feature, child, column_keys);
         },this);
         return text;  
     },
@@ -111,6 +119,7 @@ Ext.define('CustomApp', {
         
         var release_start_date = this.cbRelease.getRecord().get('ReleaseStartDate');
         var release_end_date = this.cbRelease.getRecord().get('ReleaseDate');
+        var releaseName = this.cbRelease.getRecord().get('Name');
         
         this._fetchPortfolioItems(release_filter, feature_filter).then({
             scope: this,
@@ -120,7 +129,7 @@ Ext.define('CustomApp', {
                     scope: this,
                     success: function(user_story_data){
                         this.logger.log('fetchUserStories success', user_story_data);
-                        this._fetchIterations(release_start_date, release_end_date, this.unscheduledFieldName, this.outsideReleaseFieldName).then({
+                        this._fetchIterations(release_start_date, release_end_date, releaseName, this.unscheduledFieldName, this.outsideReleaseFieldName).then({
                             scope: this,
                             success: function(){
                                 this.logger.log('_fetchIterations', this.iterationMap);
@@ -130,8 +139,13 @@ Ext.define('CustomApp', {
                                 var root = this.buildRoot(this._getPortfolioItemFieldName(),inputData,this.unscheduledFieldName,this.outsideReleaseFieldName);
                                     
                                 var model_fields = [];
+                                model_fields.push({name: 'ObjectID'});
                                 model_fields.push({name: 'FormattedID'});
                                 model_fields.push({name: 'Name'});
+                                model_fields.push({name: 'ScheduleState'});
+                                model_fields.push({name: 'c_CodeDeploymentSchedule'});
+                                model_fields.push({name: 'c_FeatureTargetSprint'});
+                                model_fields.push({name: 'c_FeatureDeploymentType'});
                                 Ext.each(Object.keys(this.iterationMap), function(key){
                                     model_fields.push({name: key});
                                 });
@@ -238,7 +252,7 @@ Ext.define('CustomApp', {
         });
         return deferred;
     },
-    _fetchIterations: function(releaseStartDate, releaseEndDate, unscheduledFieldName, outsideReleaseFieldName){
+    _fetchIterations: function(releaseStartDate, releaseEndDate, releaseName, unscheduledFieldName, outsideReleaseFieldName){
         var deferred = Ext.create('Deft.Deferred');
         
         var filters = Ext.create('Rally.data.wsapi.Filter',{
@@ -250,6 +264,11 @@ Ext.define('CustomApp', {
             property: 'EndDate',
             operator: '>',
             value: Rally.util.DateTime.toIsoString(new Date(releaseStartDate))
+        }));
+        filters = filters.and(Ext.create('Rally.data.wsapi.Filter',{
+            property: 'Name',
+            operator: 'contains',
+            value: this._getIterationNameFilter(releaseName)
         }));
         var sorter = [{
                 property: 'StartDate',
@@ -313,47 +332,161 @@ Ext.define('CustomApp', {
             }
         
             var tree = this.add({
-                xtype:'treepanel',
-                itemId: 'feature-tree',
-                store: tree_store,
-                cls: 'rally-grid',
-                rootVisible: false,
-                rowLines: true,
-                height: this.height,
-                columns: columns
-            });
+            xtype:'treepanel',
+            itemId: 'feature-tree',
+            store: tree_store,
+            cls: 'rally-grid',
+            rootVisible: false,
+            rowLines: true,
+            height: this.height,
+            columns: columns
+        });
     },
+    _artifactRenderer: function(v,m,r){
+        var text = r.get('Name');
+        if (v && v.length > 0){
+            if (r.childNodes.length > 0){
+                m.tdCls = "feature";
+                text = this._getFeatureText(r);
+            } else {
+                text = this._getStoryText(r);
+            }
+        } else {
+            m.tdCls = "total";
+        }
+        return text;
+    },
+    _getFeatureText: function(feature, withoutHtml){
+        var storyPoints = 0;
+        var text = '';
 
+        if (!feature.get('FormattedID')){
+            return feature.get('Name');
+        }
+
+        if (withoutHtml && feature && feature.get('FormattedID')){
+            text = feature.get('FormattedID') + ": " + feature.get('Name');
+            text = Ext.String.format("{0}<br/>Feature Target Sprint: {1}<br/>Feature Deployment Type: {2}<br/>Code Deployment Schedule: {3}<br/>Story Points: {4}",
+                text,
+                feature.get('c_FeatureTargetSprint'),
+                feature.get('c_FeatureDeploymentType'),
+                feature.get('c_CodeDeploymentSchedule'),
+                storyPoints
+            );
+        } else {
+            var urlText = Ext.String.format("/{0}/{1}","portfolioitem/feature", feature.get('ObjectID'));
+            var url = Rally.nav.Manager.getDetailUrl(urlText);
+            text = Ext.String.format('<a href="{0}" target="_blank"><b>{1}</b></a>',url, feature.get('FormattedID'));
+            text += ": " + feature.get('Name');
+            text = Ext.String.format("<br/>{0}<br/>Feature Target Sprint: <b>{1}</b><br/>Feature Deployment Type: <b>{2}</b><br/>Code Deployment Schedule: <b>{3}</b><br/>Story Points: <b>{4}</b>",
+                text,
+                feature.get('c_FeatureTargetSprint'),
+                feature.get('c_FeatureDeploymentType'),
+                feature.get('c_CodeDeploymentSchedule'),
+                storyPoints
+            );
+        }
+        return text;
+    },
+    _getStoryText: function(story, withoutHtml){
+
+        var text = '';
+        if (withoutHtml && story.get('FormattedID')){
+            text = story.get('FormattedID');
+        } else {
+            var urlText = Ext.String.format("/{0}/{1}","userstory", story.get('ObjectID')),
+                url = Rally.nav.Manager.getDetailUrl(urlText);
+
+            text = Ext.String.format('<a href="{0}" target="_blank"><b>{1}</b></a>',url, story.get('FormattedID'));
+        }
+        text += ": " + story.get('Name');
+        return text;
+
+    },
     _constructColumns: function(){
+        var me = this;
         var columns = [{
-                           xtype: 'treecolumn',
-                           text: 'Item',
-                           dataIndex: 'FormattedID',
-                           itemId: 'tree_column',
-                           flex: 1,
-                           renderer: function(v,m,r){
-                               var text = ''
-                               if (r.get('FormattedID')){
-                                  text += r.get('FormattedID') + ': ';    
-                               }
-                               text += r.get('Name');
-                               return text;
-                           }
-                       }];
+           xtype: 'treecolumn',
+           text: 'Item',
+           dataIndex: 'FormattedID',
+           itemId: 'tree_column',
+           minWidth: 400,
+           flex: 1,
+            scope: this,
+           renderer: this._artifactRenderer
+           // function(v,m,r){
+           //
+           //    var text = r.get('Name');
+           //    if (v && v.length > 0){
+           //        var urlText = Ext.String.format("/{0}/{1}","userstory", r.get('ObjectID'));
+           //        var url = Rally.nav.Manager.getDetailUrl(urlText);
+           //        text = Ext.String.format('<a href="{0}" target="_blank">{1}</a>',url, r.get('FormattedID'));
+           //        text += ": " + r.get('Name');
+           //
+           //    } else {
+           //        m.tdCls = "total";
+           //        console.log('total');
+           //    }
+           //
+           //    if (v && v.length > 0 && r.childNodes.length > 0){
+           //        var storyPoints = 0;
+           //        m.tdCls = "feature";
+           //        var urlText = Ext.String.format("/{0}/{1}","portfolioitem/feature", r.get('ObjectID'));
+           //        var url = Rally.nav.Manager.getDetailUrl(urlText);
+           //        text = Ext.String.format('<a href="{0}" target="_blank">{1}</a>',url, r.get('FormattedID'));
+           //        text += ": " + r.get('Name');
+           //        return Ext.String.format("<br/>{0}<br/>Feature Target Sprint: <b>{1}</b><br/>Feature Deployment Type: <b>{2}</b><br/>Code Deployment Schedule: <b>{3}</b><br/>Story Points: <b>{4}</b>",
+           //            text,
+           //            r.get('c_FeatureTargetSprint'),
+           //            r.get('c_FeatureDeploymentType'),
+           //            r.get('c_CodeDeploymentSchedule'),
+           //            storyPoints
+           //        );
+           //    }
+           //    return text;
+           //}
+       },{
+            text: 'Schedule State',
+            dataIndex: 'ScheduleState',
+            renderer: function(v, m, r){
+                if (!r.get('FormattedID')){
+                    m.tdCls = 'total';
+                }
+            }
+        }];
         
         Ext.each(Object.keys(this.iterationMap), function(key){
             columns.push({
                 text: this.iterationMap[key],
-                dataIndex: key
+                dataIndex: key,
+                cls: 'vertical-grid-header',
+                width: 30,
+                height: 100,
+                //width: 20,
+                renderer: function(v,m,r){
+
+                    m.tdCls = 'column-style';
+                    if (!r.get('FormattedID')){
+                        m.tdCls = 'column-style total';
+                    }
+                    if (v > 0){
+                        return v;
+                    }
+                    return '';
+                }
             });
         },this);
-        
-        columns.push({text:this.unscheduledFieldName, dataIndex: this.unscheduledFieldName});
-        columns.push({text:this.outsideReleaseFieldName, dataIndex: this.outsideReleaseFieldName});
-        
+
         this.logger.log('_constructColumns',columns);
         return columns; 
     },
+
+    getLinkByOid: function(objectType, objectId, linkText){
+        var urlText = Ext.String.format("/{0}/{1}",objectType.toLowerCase(),objectId);
+        var url = Rally.nav.Manager.getDetailUrl(urlText);
+        return Ext.String.format('<a href="{0}" target="_blank">{1}</a>',url,linkText);
+    },
+
     buildRoot: function(parentField, inputData){
         this.logger.log('buildRoot', inputData);
         var model_hash = Rally.technicalservices.util.TreeBuilding.prepareModelHash(inputData,parentField);
@@ -383,10 +516,17 @@ Ext.define('CustomApp', {
             total_root[this.unscheduledFieldName] += item[this.unscheduledFieldName];
             total_root[this.outsideReleaseFieldName] += item[this.outsideReleaseFieldName];
         },this);
-        total_root['children'] = root_array;
-        total_root['expanded'] = true;
+
+        //total_root['children'] = root_array;
+        //total_root['expanded'] = true;
+        //this.logger.log('build: root_array',total_root);
+        //return total_root;
+        total_root['children'] = [];
+        root_array.push(total_root);
         this.logger.log('build: root_array',total_root);
-        return total_root; 
+        return root_array;
+
+
     },
 
     _addColumnsAndBucketData: function(model_hash){
@@ -413,5 +553,15 @@ Ext.define('CustomApp', {
         }, this);
         this.logger.log('_addColumnsAndBucketData', model_hash, this.iterationMap);
         return model_hash; 
-    }
+    },
+    _getIterationNameFilter: function(releaseName){
+        var iterationNameFilter = null;
+        if (releaseName){
+            var match = /Release ([\d]*)/.exec(releaseName);
+            if (match && match.length > 1){
+                return 'R' + match[1];
+            }
+        }
+        return iterationNameFilter;
+    },
 });
