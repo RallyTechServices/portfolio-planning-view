@@ -421,6 +421,10 @@ Ext.define('CustomApp', {
                 if (!r.get('FormattedID')){
                     m.tdCls = 'total';
                 }
+                if (v){
+                    return v;
+                }
+
             }
         }];
         

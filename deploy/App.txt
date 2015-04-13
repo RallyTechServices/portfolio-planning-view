@@ -3,11 +3,11 @@
 <head>
     <title>Portfolio Planning View</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Mon Apr 13 2015 13:52:44 GMT-0700 (PDT) -->
+    <!--  Build Date: Mon Apr 13 2015 13:53:45 GMT-0700 (PDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Mon Apr 13 2015 13:52:44 GMT-0700 (PDT)";
-        var CHECKSUM = 29171084989;
+        var APP_BUILD_DATE = "Mon Apr 13 2015 13:53:45 GMT-0700 (PDT)";
+        var CHECKSUM = 29207751188;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc3/sdk.js"></script>
@@ -819,6 +819,10 @@ Ext.define('CustomApp', {
                 if (!r.get('FormattedID')){
                     m.tdCls = 'total';
                 }
+                if (v){
+                    return v;
+                }
+
             }
         }];
         
