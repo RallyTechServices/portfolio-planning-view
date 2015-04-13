@@ -414,37 +414,6 @@ Ext.define('CustomApp', {
            flex: 1,
             scope: this,
            renderer: this._artifactRenderer
-           // function(v,m,r){
-           //
-           //    var text = r.get('Name');
-           //    if (v && v.length > 0){
-           //        var urlText = Ext.String.format("/{0}/{1}","userstory", r.get('ObjectID'));
-           //        var url = Rally.nav.Manager.getDetailUrl(urlText);
-           //        text = Ext.String.format('<a href="{0}" target="_blank">{1}</a>',url, r.get('FormattedID'));
-           //        text += ": " + r.get('Name');
-           //
-           //    } else {
-           //        m.tdCls = "total";
-           //        console.log('total');
-           //    }
-           //
-           //    if (v && v.length > 0 && r.childNodes.length > 0){
-           //        var storyPoints = 0;
-           //        m.tdCls = "feature";
-           //        var urlText = Ext.String.format("/{0}/{1}","portfolioitem/feature", r.get('ObjectID'));
-           //        var url = Rally.nav.Manager.getDetailUrl(urlText);
-           //        text = Ext.String.format('<a href="{0}" target="_blank">{1}</a>',url, r.get('FormattedID'));
-           //        text += ": " + r.get('Name');
-           //        return Ext.String.format("<br/>{0}<br/>Feature Target Sprint: <b>{1}</b><br/>Feature Deployment Type: <b>{2}</b><br/>Code Deployment Schedule: <b>{3}</b><br/>Story Points: <b>{4}</b>",
-           //            text,
-           //            r.get('c_FeatureTargetSprint'),
-           //            r.get('c_FeatureDeploymentType'),
-           //            r.get('c_CodeDeploymentSchedule'),
-           //            storyPoints
-           //        );
-           //    }
-           //    return text;
-           //}
        },{
             text: 'Schedule State',
             dataIndex: 'ScheduleState',
@@ -517,16 +486,10 @@ Ext.define('CustomApp', {
             total_root[this.outsideReleaseFieldName] += item[this.outsideReleaseFieldName];
         },this);
 
-        //total_root['children'] = root_array;
-        //total_root['expanded'] = true;
-        //this.logger.log('build: root_array',total_root);
-        //return total_root;
         total_root['children'] = [];
         root_array.push(total_root);
         this.logger.log('build: root_array',total_root);
         return root_array;
-
-
     },
 
     _addColumnsAndBucketData: function(model_hash){
@@ -563,5 +526,5 @@ Ext.define('CustomApp', {
             }
         }
         return iterationNameFilter;
-    },
+    }
 });
