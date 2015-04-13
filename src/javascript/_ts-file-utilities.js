@@ -4,7 +4,7 @@ Ext.define('Rally.technicalservices.FileUtilities', {
     
     saveTextAsFile: function(textToWrite, fileName)
     {
-        var textFileAsBlob = new Blob([textToWrite], {type:'text/plain'});
+        var textFileAsBlob = new Blob([textToWrite], {type:'application/vnd.ms-excel'});
         var fileNameToSaveAs = fileName;
 
         var downloadLink = document.createElement("a");
