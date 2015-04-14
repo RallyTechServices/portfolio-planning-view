@@ -10,8 +10,8 @@ Ext.define('CustomApp', {
     ],
     portfolioItemType: 'PortfolioItem/Feature',
     portfolioItemFilterField: 'c_FeatureType',
-    portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name','c_FeatureTargetSprint','c_FeatureDeploymentType','c_CodeDeploymentSchedule'],
-    userStoryFetchFields: ['ObjectID','ScheduleState','FormattedID','Name','Feature','PlanEstimate','Iteration','Name'],
+    portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name','c_FeatureTargetSprint','c_FeatureDeploymentType','c_CodeDeploymentSchedule','Owner'],
+    userStoryFetchFields: ['ObjectID','ScheduleState','FormattedID','Name','Feature','PlanEstimate','Iteration','Name','Owner'],
     unscheduledFieldName: 'Unscheduled',
     outsideReleaseFieldName: 'OutsideRelease',
     launch: function() {
@@ -146,6 +146,7 @@ Ext.define('CustomApp', {
                                 model_fields.push({name: 'c_CodeDeploymentSchedule'});
                                 model_fields.push({name: 'c_FeatureTargetSprint'});
                                 model_fields.push({name: 'c_FeatureDeploymentType'});
+                                model_fields.push({name: 'Owner'});
                                 Ext.each(Object.keys(this.iterationMap), function(key){
                                     model_fields.push({name: key});
                                 });
@@ -156,7 +157,7 @@ Ext.define('CustomApp', {
                                     extend: 'Ext.data.Model',
                                     fields: model_fields
                                 });
-                                
+
                                 var treeStore = Ext.create('Ext.data.TreeStore',{
                                     model: IterationTreeModel,
                                     root: {expanded: true, children: root}
@@ -338,6 +339,7 @@ Ext.define('CustomApp', {
             cls: 'rally-grid',
             rootVisible: false,
             rowLines: true,
+                split: true,
             height: this.height,
             columns: columns
         });
@@ -366,13 +368,6 @@ Ext.define('CustomApp', {
 
         if (withoutHtml && feature && feature.get('FormattedID')){
             text = feature.get('FormattedID') + ": " + feature.get('Name');
-            text = Ext.String.format("{0}<br/>Feature Target Sprint: {1}<br/>Feature Deployment Type: {2}<br/>Code Deployment Schedule: {3}<br/>Story Points: {4}",
-                text,
-                feature.get('c_FeatureTargetSprint'),
-                feature.get('c_FeatureDeploymentType'),
-                feature.get('c_CodeDeploymentSchedule'),
-                storyPoints
-            );
         } else {
             var urlText = Ext.String.format("/{0}/{1}","portfolioitem/feature", feature.get('ObjectID'));
             var url = Rally.nav.Manager.getDetailUrl(urlText);
@@ -410,8 +405,9 @@ Ext.define('CustomApp', {
            text: 'Item',
            dataIndex: 'FormattedID',
            itemId: 'tree_column',
-           minWidth: 400,
-           flex: 1,
+           //minWidth: 400,
+            width: '75%',
+          // flex: 1,
             scope: this,
            renderer: this._artifactRenderer
        },{
@@ -425,6 +421,17 @@ Ext.define('CustomApp', {
                     return v;
                 }
 
+            }
+        },{
+            text: 'Owner',
+            dataIndex: 'Owner',
+            renderer: function(v,m,r){
+                if (v){
+                    if (v._refObjectName){
+                        return v._refObjectName;
+                    }
+                }
+                return '';
             }
         }];
         
@@ -466,7 +473,6 @@ Ext.define('CustomApp', {
         
         model_hash = this._addColumnsAndBucketData(model_hash);
         var root_array = Rally.technicalservices.util.TreeBuilding.constructRootItems(model_hash);
-
         var me = this;
         Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: this.unscheduledFieldName, leaves_only: true, calculator: function(item){return item.get(me.unscheduledFieldName) || 0;}});
         Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: this.outsideReleaseFieldName, leaves_only: true, calculator:function(item){return item.get(me.outsideReleaseFieldName) || 0;}});
@@ -474,7 +480,7 @@ Ext.define('CustomApp', {
             Rally.technicalservices.util.TreeBuilding.rollup({root_items: root_array, field_name: key, leaves_only: true, calculator: function(item){return item.get(key) || 0;}});
         },this);
         root_array = Rally.technicalservices.util.TreeBuilding.convertModelsToHashes(root_array);
-        
+
         var total_root = {};
         total_root['Name'] = 'Total';
         Ext.each(Object.keys(this.iterationMap), function(key){
