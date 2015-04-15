@@ -346,8 +346,9 @@ Ext.define('CustomApp', {
     },
     _artifactRenderer: function(v,m,r){
         var text = r.get('Name');
+        console.log(r, r.getDepth());
         if (v && v.length > 0){
-            if (r.childNodes.length > 0){
+            if (r.getDepth() == 1){
                 m.tdCls = "feature";
                 text = this._getFeatureText(r);
             } else {
