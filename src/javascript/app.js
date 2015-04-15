@@ -405,9 +405,7 @@ Ext.define('CustomApp', {
            text: 'Item',
            dataIndex: 'FormattedID',
            itemId: 'tree_column',
-           //minWidth: 400,
-            width: '75%',
-          // flex: 1,
+            width: '50%',
             scope: this,
            renderer: this._artifactRenderer
        },{
@@ -439,13 +437,12 @@ Ext.define('CustomApp', {
             columns.push({
                 text: this.iterationMap[key],
                 dataIndex: key,
-                cls: 'vertical-grid-header',
-                width: 30,
+              //  cls: 'iteration',
+                width: 45,
                 height: 100,
-                //width: 20,
+                renderTpl: '<div id="{id}-titleEl" role="presentation" class="x-column-header-inner iteration" style="padding-top: 44px; padding-bottom: 44px; width: 75px; text-align:left;"><span id="{id}-textEl" class="x-column-header-text iteration">{text}</span><div id="{id}-triggerEl" role="presentation" class="x-column-header-trigger" style="cursor: col-resize;"></div></div>',
                 renderer: function(v,m,r){
-
-                    m.tdCls = 'column-style';
+                    m.tdCls = 'column-style';  //'column-style';
                     if (!r.get('FormattedID')){
                         m.tdCls = 'column-style total';
                     }
