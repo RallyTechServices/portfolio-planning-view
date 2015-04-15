@@ -70,7 +70,7 @@ Ext.define('CustomApp', {
         this.logger.log('_export tree_store',model.getFields(),featureNodes);
 
         var column_keys = [];
-        var text = 'Feature, User Story, ScheduleState,';
+        var text = 'Feature,User Story,ScheduleState,Owner,';
         Ext.each(Object.keys(this.iterationMap), function(key){
             text += this.iterationMap[key] + ',';
             column_keys.push(key);
@@ -80,7 +80,7 @@ Ext.define('CustomApp', {
         //This assumes one level of children under each feature.  If there are nested children, they will only show with the feature,
         //but not their parents in the flattened structure
         Ext.each(featureNodes, function(feature){
-            text += Ext.String.format("\"{0}\",,,", this._getFeatureText(feature,true));
+            text += Ext.String.format("\"{0}\",,,\"{1}\",", this._getFeatureText(feature,true),feature.get('Owner')||'');
             Ext.each(column_keys, function(key){
                 text += feature.get(key) + ',';
             },this);
@@ -96,7 +96,7 @@ Ext.define('CustomApp', {
             return text;
         }
         Ext.each(parent_node.childNodes, function(child){
-                text += Ext.String.format('"",\"{0}\",{1},',this._getStoryText(child, true),child.get('ScheduleState'));
+                text += Ext.String.format('"",\"{0}\",{1},\"{2}\",',this._getStoryText(child, true),child.get('ScheduleState'),child.get('Owner'));
                 Ext.each(column_keys, function(key){
                     text += child.get(key) + ',';
                 },this);
@@ -255,22 +255,24 @@ Ext.define('CustomApp', {
     },
     _fetchIterations: function(releaseStartDate, releaseEndDate, releaseName, unscheduledFieldName, outsideReleaseFieldName){
         var deferred = Ext.create('Deft.Deferred');
-        
-        var filters = Ext.create('Rally.data.wsapi.Filter',{
-            property: 'StartDate',
-            operator: '<',
-            value: Rally.util.DateTime.toIsoString(new Date(releaseEndDate))
-        });
-        filters = filters.and(Ext.create('Rally.data.wsapi.Filter',{
-            property: 'EndDate',
-            operator: '>',
-            value: Rally.util.DateTime.toIsoString(new Date(releaseStartDate))
-        }));
-        filters = filters.and(Ext.create('Rally.data.wsapi.Filter',{
-            property: 'Name',
-            operator: 'contains',
-            value: this._getIterationNameFilter(releaseName)
-        }));
+        /* Filter only by iteration name */
+        //var filters = Ext.create('Rally.data.wsapi.Filter',{
+        //    property: 'StartDate',
+        //    operator: '<',
+        //    value: Rally.util.DateTime.toIsoString(new Date(releaseEndDate))
+        //});
+        //filters = filters.and(Ext.create('Rally.data.wsapi.Filter',{
+        //    property: 'EndDate',
+        //    operator: '>',
+        //    value: Rally.util.DateTime.toIsoString(new Date(releaseStartDate))
+        //}));
+        //filters = filters.and(Ext.create('Rally.data.wsapi.Filter',{
+            var filters = Ext.create('Rally.data.wsapi.Filter',{
+                property: 'Name',
+                operator: 'contains',
+                value: this._getIterationNameFilter(releaseName)
+            });
+
         var sorter = [{
                 property: 'StartDate',
                 direction: 'ASC'
@@ -346,7 +348,6 @@ Ext.define('CustomApp', {
     },
     _artifactRenderer: function(v,m,r){
         var text = r.get('Name');
-        console.log(r, r.getDepth());
         if (v && v.length > 0){
             if (r.getDepth() == 1){
                 m.tdCls = "feature";
