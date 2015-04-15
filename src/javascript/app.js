@@ -80,7 +80,8 @@ Ext.define('CustomApp', {
         //This assumes one level of children under each feature.  If there are nested children, they will only show with the feature,
         //but not their parents in the flattened structure
         Ext.each(featureNodes, function(feature){
-            text += Ext.String.format("\"{0}\",,,\"{1}\",", this._getFeatureText(feature,true),feature.get('Owner')||'');
+            var owner = feature.get('Owner') || {};
+            text += Ext.String.format("\"{0}\",,,\"{1}\",", this._getFeatureText(feature,true),owner._refObjectName || '');
             Ext.each(column_keys, function(key){
                 text += feature.get(key) + ',';
             },this);
@@ -96,7 +97,9 @@ Ext.define('CustomApp', {
             return text;
         }
         Ext.each(parent_node.childNodes, function(child){
-                text += Ext.String.format('"",\"{0}\",{1},\"{2}\",',this._getStoryText(child, true),child.get('ScheduleState'),child.get('Owner'));
+            var owner = child.get('Owner') || {};
+
+                text += Ext.String.format('"",\"{0}\",{1},\"{2}\",',this._getStoryText(child, true),child.get('ScheduleState'),owner._refObjectName || '');
                 Ext.each(column_keys, function(key){
                     text += child.get(key) + ',';
                 },this);
