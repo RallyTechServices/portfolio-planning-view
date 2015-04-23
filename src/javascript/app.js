@@ -10,7 +10,7 @@ Ext.define('CustomApp', {
     ],
     portfolioItemType: 'PortfolioItem/Feature',
     portfolioItemFilterField: 'c_FeatureType',
-    portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name','c_FeatureTargetSprint','c_FeatureDeploymentType','c_CodeDeploymentSchedule','Owner'],
+    portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name','c_FeatureTargetSprint','c_FeatureDeploymentType','c_CodeDeploymentSchedule','Owner','LeafStoryPlanEstimateTotal'],
     userStoryFetchFields: ['ObjectID','ScheduleState','FormattedID','Name','Feature','PlanEstimate','Iteration','Name','Owner'],
     unscheduledFieldName: 'Unscheduled',
     outsideReleaseFieldName: 'OutsideRelease',
@@ -150,6 +150,7 @@ Ext.define('CustomApp', {
                                 model_fields.push({name: 'c_FeatureTargetSprint'});
                                 model_fields.push({name: 'c_FeatureDeploymentType'});
                                 model_fields.push({name: 'Owner'});
+                                model_fields.push({name: 'LeafStoryPlanEstimateTotal'});
                                 Ext.each(Object.keys(this.iterationMap), function(key){
                                     model_fields.push({name: key});
                                 });
@@ -364,8 +365,7 @@ Ext.define('CustomApp', {
         return text;
     },
     _getFeatureText: function(feature, withoutHtml){
-        var storyPoints = 0;
-        var text = '';
+         var text = '';
 
         if (!feature.get('FormattedID')){
             return feature.get('Name');
@@ -374,15 +374,21 @@ Ext.define('CustomApp', {
         if (withoutHtml && feature && feature.get('FormattedID')){
             text = feature.get('FormattedID') + ": " + feature.get('Name');
         } else {
+            var storyPoints = feature.get('LeafStoryPlanEstimateTotal');
+            var storyPointsInRelease = 0;
+            Ext.each(Object.keys(this.iterationMap),function(key){
+                storyPointsInRelease += feature.get(key);
+            });
             var urlText = Ext.String.format("/{0}/{1}","portfolioitem/feature", feature.get('ObjectID'));
             var url = Rally.nav.Manager.getDetailUrl(urlText);
             text = Ext.String.format('<a href="{0}" target="_blank"><b>{1}</b></a>',url, feature.get('FormattedID'));
             text += ": " + feature.get('Name');
-            text = Ext.String.format("<br/>{0}<br/>Feature Target Sprint: <b>{1}</b><br/>Feature Deployment Type: <b>{2}</b><br/>Code Deployment Schedule: <b>{3}</b><br/>Story Points: <b>{4}</b>",
+            text = Ext.String.format("<br/>{0}<br/>Feature Target Sprint: <b>{1}</b><br/>Feature Deployment Type: <b>{2}</b><br/>Code Deployment Schedule: <b>{3}</b><br/>Story Points: <b>{4} / {5}</b>",
                 text,
                 feature.get('c_FeatureTargetSprint'),
                 feature.get('c_FeatureDeploymentType'),
                 feature.get('c_CodeDeploymentSchedule'),
+                storyPointsInRelease,
                 storyPoints
             );
         }
