@@ -3,11 +3,11 @@
 <head>
     <title>Portfolio Planning View</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Thu Apr 23 2015 15:13:33 GMT-0600 (MDT) -->
+    <!--  Build Date: Wed May 06 2015 13:25:47 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Thu Apr 23 2015 15:13:33 GMT-0600 (MDT)";
-        var CHECKSUM = 31241929896;
+        var APP_BUILD_DATE = "Wed May 06 2015 13:25:47 GMT-0600 (MDT)";
+        var CHECKSUM = 31485757439;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc3/sdk.js"></script>
@@ -408,7 +408,7 @@ Ext.define('CustomApp', {
     ],
     portfolioItemType: 'PortfolioItem/Feature',
     portfolioItemFilterField: 'c_FeatureType',
-    portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name','c_FeatureTargetSprint','c_FeatureDeploymentType','c_CodeDeploymentSchedule','Owner','LeafStoryPlanEstimateTotal'],
+    portfolioItemTypeFetchFields: ['ObjectID','FormattedID','Name','State','c_FeatureTargetSprint','c_FeatureDeploymentType','c_CodeDeploymentSchedule','Owner','LeafStoryPlanEstimateTotal'],
     userStoryFetchFields: ['ObjectID','ScheduleState','FormattedID','Name','Feature','PlanEstimate','Iteration','Name','Owner'],
     unscheduledFieldName: 'Unscheduled',
     outsideReleaseFieldName: 'OutsideRelease',
@@ -549,6 +549,7 @@ Ext.define('CustomApp', {
                                 model_fields.push({name: 'c_FeatureDeploymentType'});
                                 model_fields.push({name: 'Owner'});
                                 model_fields.push({name: 'LeafStoryPlanEstimateTotal'});
+                                model_fields.push({name: 'State'});
                                 Ext.each(Object.keys(this.iterationMap), function(key){
                                     model_fields.push({name: key});
                                 });
@@ -781,7 +782,7 @@ Ext.define('CustomApp', {
             var url = Rally.nav.Manager.getDetailUrl(urlText);
             text = Ext.String.format('<a href="{0}" target="_blank"><b>{1}</b></a>',url, feature.get('FormattedID'));
             text += ": " + feature.get('Name');
-            text = Ext.String.format("<br/>{0}<br/>Feature Target Sprint: <b>{1}</b><br/>Feature Deployment Type: <b>{2}</b><br/>Code Deployment Schedule: <b>{3}</b><br/>Story Points: <b>{4} / {5}</b>",
+            text = Ext.String.format("<br/>{0}<br/>Feature Target Sprint: <b>{1}</b><br/>Feature Deployment Type: <b>{2}</b><br/>Code Deployment Schedule: <b>{3}</b><br/>Story Points (Release/Total): <b>{4} / {5}</b>",
                 text,
                 feature.get('c_FeatureTargetSprint'),
                 feature.get('c_FeatureDeploymentType'),
@@ -818,7 +819,7 @@ Ext.define('CustomApp', {
             scope: this,
            renderer: this._artifactRenderer
        },{
-            text: 'Schedule State',
+            text: 'State',
             dataIndex: 'ScheduleState',
             renderer: function(v, m, r){
                 if (!r.get('FormattedID')){
@@ -826,6 +827,10 @@ Ext.define('CustomApp', {
                 }
                 if (v){
                     return v;
+                } else {
+                    if (r.get('State')){
+                        return r.get('State').Name || '';
+                    }
                 }
 
             }
