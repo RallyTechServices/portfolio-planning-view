@@ -244,7 +244,11 @@ Ext.define('CustomApp', {
         Ext.each(filters, function(f){
             promises.push(this._createWsapiStore('HierarchicalRequirement',this.userStoryFetchFields, f));
         },this);
-        
+
+        var projectName = this.getContext().getProject().Name;
+        var tagFilter = [{property: 'Tags.Name', operator: 'contains', value: 'Issuer: ' + projectName}];
+        promises.push(this._createWsapiStore('HierarchicalRequirement',this.userStoryFetchFields, tagFilter, null, {project: null}));
+
         Deft.Promise.all(promises).then({
             scope:this,
             success: function(data){
@@ -261,22 +265,22 @@ Ext.define('CustomApp', {
     _fetchIterations: function(releaseStartDate, releaseEndDate, releaseName, unscheduledFieldName, outsideReleaseFieldName){
         var deferred = Ext.create('Deft.Deferred');
         /* Filter only by iteration name */
-        //var filters = Ext.create('Rally.data.wsapi.Filter',{
-        //    property: 'StartDate',
-        //    operator: '<',
-        //    value: Rally.util.DateTime.toIsoString(new Date(releaseEndDate))
-        //});
+        var filters = Ext.create('Rally.data.wsapi.Filter',{
+            property: 'StartDate',
+            operator: '<',
+            value: Rally.util.DateTime.toIsoString(new Date(releaseEndDate))
+        });
+        filters = filters.and(Ext.create('Rally.data.wsapi.Filter',{
+            property: 'EndDate',
+            operator: '>',
+            value: Rally.util.DateTime.toIsoString(new Date(releaseStartDate))
+        }));
         //filters = filters.and(Ext.create('Rally.data.wsapi.Filter',{
-        //    property: 'EndDate',
-        //    operator: '>',
-        //    value: Rally.util.DateTime.toIsoString(new Date(releaseStartDate))
-        //}));
-        //filters = filters.and(Ext.create('Rally.data.wsapi.Filter',{
-            var filters = Ext.create('Rally.data.wsapi.Filter',{
-                property: 'Name',
-                operator: 'contains',
-                value: this._getIterationNameFilter(releaseName)
-            });
+        //    var filters = Ext.create('Rally.data.wsapi.Filter',{
+        //        property: 'Name',
+        //        operator: 'contains',
+        //        value: this._getIterationNameFilter(releaseName)
+        //    });
 
         var sorter = [{
                 property: 'StartDate',
